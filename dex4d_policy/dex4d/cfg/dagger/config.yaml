@@ -1,0 +1,46 @@
+seed: -1
+
+clip_observations: 5.0
+clip_actions: 1.0
+
+policy: # only works for MlpPolicy right now
+  backbone_type: pn
+  freeze_backbone: False
+  pi_hid_sizes: [1024, 1024, 512, 512]
+  vf_hid_sizes: [1024, 1024, 512, 512]
+  activation: elu # can be elu, relu, selu, crelu, lrelu, tanh, sigmoid
+  teacher_forcing_iterations: -1 # use -1 to disable teacher forcing
+  predict_future_states: True
+  future_loss_weights:
+    robot_qpos: 1
+    robot_qvel: 1
+    # object_and_goal_kp: 1
+learn:
+  agent_name: robot
+  actor_critic_class: ActorCriticPointNet # teacher
+  actor_class: ActorPointNetTransformer # student
+
+  test: False
+  resume: 0
+  save_interval: 500 # check for potential saves every this many iterations
+  print_log: True
+
+  # rollout params
+  max_iterations: 25000
+
+  # training params
+  cliprange: 0.2
+  ent_coef: 0
+  buffer_size: 16
+  nsteps: 1
+  noptepochs: 5
+  nminibatches: 4 # this is per agent
+  max_grad_norm: 1
+  learning_rate: 1.e-4
+  schedule: adaptive # could be adaptive or linear or fixed
+  desired_kl: 0.016
+  gamma: 0.96
+  lam: 0.95
+  init_noise_std: 0.8
+
+  log_interval: 1
