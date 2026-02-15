@@ -1,6 +1,6 @@
 # Dex4D-Simulation
 
-
+NOTE: still under construction
 
 ## Installation
 
@@ -91,6 +91,7 @@ First fill in the `<YOUR_LOG_DIR>` and `<CKPT_NAME_FROM_STAGE_1_2>` in `script/r
 # override config for stage 3 training
 cp cfg/xarm6_leap_hand_ap2ap_stage_3.yaml cfg/xarm6_leap_hand_ap2ap.yaml
 cp cfg/ppo/config_stage_3.yaml cfg/ppo/config.yaml
+# launch training
 bash script/run_train_ppo_stage_3.sh
 ```
 
