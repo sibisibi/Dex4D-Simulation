@@ -1,7 +1,7 @@
 from utils.util import copy_files
 
 def process_ppo(args, env, cfg_train, logdir):
-    from algorithms.rl.ppo import PPO, ActorCritic, ActorCriticPointNet, ActorCriticPointNetTransformer
+    from algorithms.rl.ppo import PPO, ActorCritic, ActorCriticPointNet
     learn_cfg = cfg_train["learn"]
     #is_testing = learn_cfg["test"]
     is_testing = args.test
@@ -54,7 +54,7 @@ def process_ppo(args, env, cfg_train, logdir):
 
 def process_dagger(args, env, cfg_train, logdir):
     from algorithms.rl.ppo import ActorCritic, ActorCriticPointNet
-    from algorithms.rl.dagger import DAGGER, Actor, ActorPointNet, ActorPointNetTransformer, ActorPointNetTransformerV2
+    from algorithms.rl.dagger import DAGGER, Actor, ActorPointNet, ActorPointNetTransformer
     learn_cfg = cfg_train["learn"]
     #is_testing = learn_cfg["test"]
     is_testing = args.test
