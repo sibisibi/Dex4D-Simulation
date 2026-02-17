@@ -5,11 +5,7 @@
 # distribution of this software and related documentation without an express
 # license agreement from NVIDIA CORPORATION is strictly prohibited.
 
-from tasks.shadow_hand_grasp import ShadowHandGrasp
-from tasks.shadow_hand_random_load_vision import ShadowHandRandomLoadVision
-from tasks.xarm6_leap_hand_grasp import XArm6LeapHandGrasp
 from tasks.xarm6_leap_hand_ap2ap import XArm6LeapHandAP2AP
-from tasks.franka_leap_hand_ap2ap import FrankaLeapHandAP2AP
 from tasks.xarm6_leap_hand_ap2ap_vision import XArm6LeapHandAP2APVision
 
 from tasks.hand_base.vec_task import VecTaskCPU, VecTaskGPU, VecTaskPython, VecTaskPythonArm

@@ -1,12 +1,12 @@
 # Dex4D-Simulation
 
-NOTE: still under construction
+This is the codebase for the simulation (AP2AP) part of the Dex4D project.
 
 ## Installation
 
 The code is tested on Python 3.8.20 with cuda toolkit 11.8.
 
-Please follow the steps below to perform the installation：
+Please follow the steps below to perform the installation:
 
 
 ### 1. Create virtual environment
