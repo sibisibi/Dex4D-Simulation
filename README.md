@@ -1,6 +1,8 @@
 # Dex4D-Simulation
 
-This is the codebase for the simulation (AP2AP) part of the Dex4D project.
+This is the codebase for the simulation (AP2AP) part of our paper [Dex4D](https://arxiv.org/abs/2602.15828). This repository contains code for the simulation (AP2AP) environment, teacher and student policy training, policy inference, and trained model checkpoints.
+
+**[`[Paper]`](https://arxiv.org/abs/2602.15828) [`[Project Page]`](https://dex4d.github.io/) [`[Checkpoints]`](./dex4d_policy/dex4d/example_models/) [`[Code (Vision)]`](https://github.com/Dex4D/Dex4D-Vision) [`[Code (Hardware)]`](https://github.com/Dex4D/Dex4D-Hardware)**
 
 
 https://github.com/user-attachments/assets/0c43135a-5d40-4ba5-908a-4de3bdafa851
