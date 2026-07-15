@@ -75,6 +75,8 @@ class DAGGER:
         # add num_keypoints to model_cfg
         model_cfg['num_keypoints'] = vec_env.task.num_keypoints
         model_cfg['kp_downsample_ratio'] = vec_env.task.kp_downsample_ratio
+        # student obs prefix (qpos+qvel+action) is embodiment-dependent (22 stock, 19 FR3)
+        model_cfg['num_robot_dofs'] = getattr(vec_env.task, 'num_robot_dofs', 22)
         self.future_loss_weights = model_cfg.get("future_loss_weights", None)
         self.teacher_forcing_iterations = model_cfg.get("teacher_forcing_iterations", -1)
 
