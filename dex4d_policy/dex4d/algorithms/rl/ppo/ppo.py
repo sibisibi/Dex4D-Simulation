@@ -121,6 +121,7 @@ class PPO:
         self.current_learning_iteration = 0
 
         self.apply_reset = apply_reset
+        self.pose_viewer = None  # optionally attached by process_ppo
 
         
 
@@ -234,6 +235,8 @@ class PPO:
                     actions, actions_log_prob, values, mu, sigma = self.actor_critic.act(current_obs, current_states)
                     # Step the vec_environment
                     next_obs, rews, dones, infos = self.vec_env.step(actions, id)
+                    if self.pose_viewer is not None:
+                        self.pose_viewer.on_step()
                     next_states = self.vec_env.get_state()
                     # Record the transition
                     self.storage.add_transitions(current_obs, current_states, actions, rews, dones, values, actions_log_prob, mu, sigma)

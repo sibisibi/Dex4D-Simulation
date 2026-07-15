@@ -1,3 +1,5 @@
+import os.path as osp
+
 from utils.util import copy_files
 
 def process_ppo(args, env, cfg_train, logdir):
@@ -45,6 +47,19 @@ def process_ppo(args, env, cfg_train, logdir):
               )
     if not is_testing:
         copy_files(args, logdir)
+
+    if (not is_testing) and args.capture_viewer:
+        from utils.pose_viewer import Dex4DPoseViewer
+        ppo.pose_viewer = Dex4DPoseViewer(
+            env.task,
+            output_dir=osp.join(logdir, "interactive_viewer"),
+            capture_len=args.capture_viewer_len,
+            capture_interval=args.capture_viewer_interval,
+            env_id=args.capture_viewer_env_id,
+            wandb_key=args.capture_viewer_wandb_key,
+            robot_raw_base=args.capture_viewer_raw_base,
+            url_check=args.capture_viewer_url_check,
+        )
 
     if is_testing and args.model_dir != "":
         print("Loading model from {}".format(chkpt_path))

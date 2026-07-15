@@ -283,6 +283,16 @@ def get_args(benchmark=False, use_rlg_config=False):
             "help": "wandb entity (team/user); empty uses the account default"},
         {"name": "--wandb_name", "type": str, "default": "",
             "help": "wandb run name; empty uses the logdir basename"},
+        {"name": "--capture_viewer", "action": "store_true", "default": False,
+            "help": "write periodic pose-only interactive HTML viewers and log them to wandb"},
+        {"name": "--capture_viewer_len", "type": int, "default": 600},
+        {"name": "--capture_viewer_interval", "type": int, "default": 6000},
+        {"name": "--capture_viewer_env_id", "type": int, "default": 0},
+        {"name": "--capture_viewer_wandb_key", "type": str, "default": "interactive_viewer"},
+        {"name": "--capture_viewer_raw_base", "type": str, "default": "",
+            "help": "raw-GitHub base URL for robot meshes; empty picks by embodiment"},
+        {"name": "--capture_viewer_url_check", "type": str, "default": "skip",
+            "help": "HEAD-check the first robot mesh URL: skip/warn/error"},
     ]
 
     if benchmark:
