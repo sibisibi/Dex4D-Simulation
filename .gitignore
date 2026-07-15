@@ -170,3 +170,14 @@ slurm/
 job_*.sh
 
 *_tmp.*
+# UniDexGrasp object datasets (downloaded, never commit)
+dex4d_policy/assets/meshdatav3_pc_feat/
+dex4d_policy/assets/meshdatav3_scaled/
+dex4d_policy/assets/meshdatav3_pc_fps/
+dex4d_policy/assets/datasetv4.1/
+dex4d_policy/assets/*.zip
+dex4d_policy/assets/*.tar.xz
+
+# training outputs
+dex4d_policy/dex4d/logs/
+dex4d_policy/dex4d/wandb/

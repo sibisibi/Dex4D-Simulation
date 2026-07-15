@@ -275,6 +275,12 @@ def get_args(benchmark=False, use_rlg_config=False):
             "help": "Choose an ffline datatype"},
         {'name': '--ocd_tag', 'type': str, 'default': ''},
         {'name': '--backbone_type', 'type': str, 'default': ''},
+        {"name": "--wandb_project", "type": str, "default": "Dex4D-PPO",
+            "help": "wandb project name"},
+        {"name": "--wandb_entity", "type": str, "default": "",
+            "help": "wandb entity (team/user); empty uses the account default"},
+        {"name": "--wandb_name", "type": str, "default": "",
+            "help": "wandb run name; empty uses the logdir basename"},
     ]
 
     if benchmark:

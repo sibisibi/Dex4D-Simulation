@@ -54,7 +54,10 @@ class PPO:
                  print_log=True,
                  apply_reset=False,
                  asymmetric=False,
-                 is_vision = False
+                 is_vision = False,
+                 wandb_project="Dex4D-PPO",
+                 wandb_entity=None,
+                 wandb_name=None
                  ):
         self.is_vision = is_vision
 
@@ -77,6 +80,8 @@ class PPO:
 
         # add num_keypoints to model_cfg
         model_cfg['num_keypoints'] = vec_env.task.num_keypoints
+        # keypoint offset in the obs vector is embodiment-dependent (197 = xArm6+LEAP default)
+        model_cfg['kp_start'] = getattr(vec_env.task, 'kp_start', 197)
 
         # PPO components
         self.vec_env = vec_env
@@ -104,8 +109,9 @@ class PPO:
         self.print_log = print_log
         if not is_testing:
             wandb.init(
-                project="Dex4D-PPO",
-                name=os.path.basename(self.log_dir),
+                project=wandb_project,
+                entity=wandb_entity,
+                name=wandb_name or os.path.basename(self.log_dir),
                 dir=os.path.dirname(self.log_dir),
             )
         self.tot_timesteps = 0

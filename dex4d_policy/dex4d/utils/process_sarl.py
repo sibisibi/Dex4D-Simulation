@@ -39,6 +39,9 @@ def process_ppo(args, env, cfg_train, logdir):
               apply_reset=False,
               asymmetric=env.task.asymmetric_obs,
               is_vision=is_vision,
+              wandb_project=args.wandb_project,
+              wandb_entity=(args.wandb_entity or None),
+              wandb_name=(args.wandb_name or None),
               )
     if not is_testing:
         copy_files(args, logdir)

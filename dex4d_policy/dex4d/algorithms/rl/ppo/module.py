@@ -305,6 +305,9 @@ class ActorCriticPointNet(nn.Module):
             activation = get_activation(model_cfg['activation'])
 
         self.num_keypoints = model_cfg.get('num_keypoints', 256)
+        # offset of the object/goal keypoints inside the obs vector; depends on the
+        # embodiment's DOF/fingertip counts (197 for xArm6+LEAP, 204 for FR3+XHand)
+        self.kp_start = model_cfg.get('kp_start', 197)
         self.kp_feature_dim = 128
         self.num_obs = obs_shape[0] # partial or full
         self.num_states = states_shape[0] # full
@@ -358,7 +361,7 @@ class ActorCriticPointNet(nn.Module):
         raise NotImplementedError
 
     def compute_obs_with_pn(self, observations):
-        kp_start = 197
+        kp_start = self.kp_start
         kp_end = kp_start + self.num_keypoints * 6
         object_kp = observations[:, kp_start:kp_start+self.num_keypoints*3].reshape(-1, self.num_keypoints, 3)
         goal_kp = observations[:, kp_start+self.num_keypoints*3:kp_start+self.num_keypoints*6].reshape(-1, self.num_keypoints, 3)

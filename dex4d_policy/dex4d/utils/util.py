@@ -107,24 +107,36 @@ def visualize_axes_isaacgym(env, env_poses, axis_length=0.1, selected_ids=None):
 def copy_files(args, logdir):
     if not os.path.exists(logdir):
         os.makedirs(logdir, exist_ok=True)
-    shutil.copy2("cfg/my_train_set.yaml", logdir)
-    shutil.copy2("utils/process_sarl.py", logdir)
+
+    def copy_if_exists(path):
+        # some referenced files (e.g. cfg/my_train_set.yaml) are not shipped in the repo
+        if os.path.exists(path):
+            shutil.copy2(path, logdir)
+
+    copy_if_exists("cfg/my_train_set.yaml")
+    copy_if_exists("utils/process_sarl.py")
 
     if args.task == "XArm6LeapHandAP2AP":
-        shutil.copy2("algorithms/rl/ppo/ppo.py", logdir)
-        shutil.copy2("algorithms/rl/ppo/module.py", logdir)
-        shutil.copy2("script/run_train_ppo_state.sh", logdir)
-        shutil.copy2("tasks/xarm6_leap_hand_ap2ap.py", logdir)
-        shutil.copy2("cfg/xarm6_leap_hand_ap2ap.yaml", logdir)
-        shutil.copy2("cfg/ppo/config.yaml", logdir)
+        copy_if_exists("algorithms/rl/ppo/ppo.py")
+        copy_if_exists("algorithms/rl/ppo/module.py")
+        copy_if_exists("script/run_train_ppo_state.sh")
+        copy_if_exists("tasks/xarm6_leap_hand_ap2ap.py")
+        copy_if_exists("cfg/xarm6_leap_hand_ap2ap.yaml")
+        copy_if_exists("cfg/ppo/config.yaml")
+    elif args.task == "FR3XHandAP2AP":
+        copy_if_exists("algorithms/rl/ppo/ppo.py")
+        copy_if_exists("algorithms/rl/ppo/module.py")
+        copy_if_exists("tasks/fr3_xhand_ap2ap.py")
+        copy_if_exists("cfg/fr3_xhand_ap2ap.yaml")
+        copy_if_exists("cfg/ppo/config.yaml")
     elif args.task == "XArm6LeapHandAP2APVision":
-        shutil.copy2("algorithms/rl/dagger/dagger.py", logdir)
-        shutil.copy2("algorithms/rl/dagger/module.py", logdir)
-        shutil.copy2("script/run_train_dagger.sh", logdir)
-        shutil.copy2("tasks/xarm6_leap_hand_ap2ap.py", logdir)
-        shutil.copy2("tasks/xarm6_leap_hand_ap2ap_vision.py", logdir)
-        shutil.copy2("cfg/xarm6_leap_hand_ap2ap_vision.yaml", logdir)
-        shutil.copy2("cfg/dagger/config.yaml", logdir)
+        copy_if_exists("algorithms/rl/dagger/dagger.py")
+        copy_if_exists("algorithms/rl/dagger/module.py")
+        copy_if_exists("script/run_train_dagger.sh")
+        copy_if_exists("tasks/xarm6_leap_hand_ap2ap.py")
+        copy_if_exists("tasks/xarm6_leap_hand_ap2ap_vision.py")
+        copy_if_exists("cfg/xarm6_leap_hand_ap2ap_vision.yaml")
+        copy_if_exists("cfg/dagger/config.yaml")
 
 def sample_position(pos, dis_range):
     '''
