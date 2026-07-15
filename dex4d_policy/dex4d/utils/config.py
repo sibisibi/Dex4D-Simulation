@@ -62,6 +62,8 @@ def set_seed(seed, torch_deterministic=False):
 def retrieve_cfg(args, use_rlg_config=False):
     if args.task == "XArm6LeapHandAP2AP":
         return os.path.join(args.logdir, "xarm6_leap_hand_ap2ap/{}/{}".format(args.algo, args.algo)), "cfg/{}/config.yaml".format(args.algo), "cfg/xarm6_leap_hand_ap2ap.yaml"
+    elif args.task == "FR3XHandAP2AP":
+        return os.path.join(args.logdir, "fr3_xhand_ap2ap/{}/{}".format(args.algo, args.algo)), "cfg/{}/config.yaml".format(args.algo), "cfg/fr3_xhand_ap2ap.yaml"
     elif args.task == "XArm6LeapHandAP2APVision":
         return os.path.join(args.logdir, "xarm6_leap_hand_ap2ap_vision/{}/{}".format(args.algo, args.algo)), "cfg/{}/config.yaml".format(args.algo), "cfg/xarm6_leap_hand_ap2ap_vision.yaml"
     else:

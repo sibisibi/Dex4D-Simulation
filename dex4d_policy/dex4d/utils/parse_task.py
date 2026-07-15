@@ -7,6 +7,7 @@
 
 from tasks.xarm6_leap_hand_ap2ap import XArm6LeapHandAP2AP
 from tasks.xarm6_leap_hand_ap2ap_vision import XArm6LeapHandAP2APVision
+from tasks.fr3_xhand_ap2ap import FR3XHandAP2AP
 
 from tasks.hand_base.vec_task import VecTaskCPU, VecTaskGPU, VecTaskPython, VecTaskPythonArm
 
