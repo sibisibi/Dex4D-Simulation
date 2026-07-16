@@ -40,6 +40,8 @@ class FR3XHandAP2AP(BaseTask):
         self.is_multi_agent = is_multi_agent
         self.randomize = False if self.cfg['test'] else self.cfg["task"].get("randomize", False)
         self.curriculum = self.cfg["task"].get("curriculum", False)
+        # stage 1 -> 2 flip iteration, CLI-overridable for the elongated-curriculum runs
+        self.stage2_start_iteration = self.cfg["task"].get("stage2_start_iteration", 15000)
         self.randomization_params = self.cfg["task"]["randomization_params"]
         self.aggregate_mode = self.cfg["env"]["aggregateMode"]
         self.dist_reward_scale = self.cfg["env"]["distRewardScale"]
@@ -1601,7 +1603,7 @@ class FR3XHandAP2AP(BaseTask):
 
     def update_curriculum(self):
         if self.curriculum:
-            if self.iteration >= 15000:
+            if self.iteration >= self.stage2_start_iteration:
                 self.too_far_reset_threshold = 1e6
                 self.goal_reset_stable_ratio = 0.2
                 # self.arm_action_clip = 0.3

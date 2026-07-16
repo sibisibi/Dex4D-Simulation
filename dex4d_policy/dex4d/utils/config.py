@@ -81,6 +81,8 @@ def load_cfg(args, use_rlg_config=False):
     # Override number of environments if passed on the command line
     if args.num_envs > 0:
         cfg["env"]["numEnvs"] = args.num_envs
+    if args.stage2_start_iteration > 0:
+        cfg["task"]["stage2_start_iteration"] = args.stage2_start_iteration
 
     if args.episode_length > 0:
         cfg["env"]["episodeLength"] = args.episode_length
@@ -283,6 +285,8 @@ def get_args(benchmark=False, use_rlg_config=False):
             "help": "wandb entity (team/user); empty uses the account default"},
         {"name": "--wandb_name", "type": str, "default": "",
             "help": "wandb run name; empty uses the logdir basename"},
+        {"name": "--stage2_start_iteration", "type": int, "default": 0,
+            "help": "override the stage 1 to 2 curriculum flip iteration (0 keeps the task default)"},
         {"name": "--capture_viewer", "action": "store_true", "default": False,
             "help": "write periodic pose-only interactive HTML viewers and log them to wandb"},
         {"name": "--capture_viewer_len", "type": int, "default": 600},
