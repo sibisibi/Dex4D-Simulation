@@ -36,7 +36,6 @@ ROBOT_RAW_BASES = {
 }
 
 GOAL_COLOR = (0.20, 0.72, 0.31)  # SimToolReal goal green
-OBJECT_COLOR = (0.90, 0.49, 0.13)  # distinct from the gray robot/table
 
 TABLE_URDF = """<robot name="table">
   <link name="table_top">
@@ -96,9 +95,20 @@ def _rewrite_robot_mesh_urls(urdf_text, raw_base):
     return ET.tostring(root, encoding="unicode")
 
 
-def _embed_object_meshes(urdf_text, urdf_dir):
-    """Inline the object's OBJ meshes as STL data URIs (dataset is local-only)."""
+def _embed_object_meshes(urdf_text, urdf_dir, strip_materials=False):
+    """Inline the object's OBJ meshes as STL data URIs (dataset is local-only).
+
+    strip_materials drops every URDF <material> element. urdf-loader re-applies
+    the URDF material to a mesh after loadMeshCb returns (URDFLoader.js:558),
+    which clobbers color_override, so the recolored goal copy must shed its
+    materials while the object copy keeps its own look.
+    """
     root = ET.fromstring(urdf_text)
+    if strip_materials:
+        for parent in root.iter():
+            for child in list(parent):
+                if child.tag == "material":
+                    parent.remove(child)
     cache = {}
     for mesh_elem in root.findall(".//mesh"):
         filename = mesh_elem.get("filename")
@@ -195,8 +205,10 @@ class Dex4DPoseViewer:
             "coacd",
             "coacd_{}.urdf".format(code_scale["scale_str"]),
         )))
-        self._object_urdf_text = _embed_object_meshes(
-            object_urdf_path.read_text(encoding="utf-8"), str(object_urdf_path.parent)
+        object_urdf_raw = object_urdf_path.read_text(encoding="utf-8")
+        self._object_urdf_text = _embed_object_meshes(object_urdf_raw, str(object_urdf_path.parent))
+        self._goal_urdf_text = _embed_object_meshes(
+            object_urdf_raw, str(object_urdf_path.parent), strip_materials=True
         )
 
         # table URDF from the sim's box dims
@@ -258,8 +270,8 @@ class Dex4DPoseViewer:
         robots = [
             make_embedded_robot(name="robot", urdf_text=self._robot_urdf_text, animated=True),
             make_embedded_robot(name="table", urdf_text=self._table_urdf_text),
-            make_embedded_robot(name="object", urdf_text=self._object_urdf_text, color_override=OBJECT_COLOR),
-            make_embedded_robot(name="goal", urdf_text=self._object_urdf_text, color_override=GOAL_COLOR),
+            make_embedded_robot(name="object", urdf_text=self._object_urdf_text),
+            make_embedded_robot(name="goal", urdf_text=self._goal_urdf_text, color_override=GOAL_COLOR),
         ]
         html_text = create_html(
             joint_names=self._joint_names,
