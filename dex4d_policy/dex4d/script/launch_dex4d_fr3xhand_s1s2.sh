@@ -17,6 +17,9 @@ conda activate dex4d-sim
 export LD_LIBRARY_PATH=$CONDA_ROOT/envs/dex4d-sim/lib:$LD_LIBRARY_PATH
 export PATH=$CONDA_ROOT/envs/dex4d-sim/bin:$PATH
 export CUDA_VISIBLE_DEVICES=$GPU
+# conda activate exports the conda compilers (toolchain activation hooks); the
+# gymtorch JIT then needs the env include dir for crypt.h (libxcrypt)
+export CPATH=$CONDA_ROOT/envs/dex4d-sim/include
 
 cp cfg/fr3_xhand_ap2ap_stage_1_2.yaml cfg/fr3_xhand_ap2ap.yaml
 cp cfg/ppo/config_stage_1_2.yaml cfg/ppo/config.yaml
