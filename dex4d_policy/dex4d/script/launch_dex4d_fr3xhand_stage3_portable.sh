@@ -20,8 +20,8 @@ export PATH=$CONDA_ROOT/envs/dex4d-sim/bin:$PATH
 export CPATH=$CONDA_ROOT/envs/dex4d-sim/include
 export CUDA_VISIBLE_DEVICES=$GPU
 
-cp cfg/fr3_xhand_ap2ap_stage_3.yaml cfg/fr3_xhand_ap2ap.yaml
-cp cfg/ppo/config_stage_3.yaml cfg/ppo/config.yaml
+# cfg goes in by direct path (--cfg_env/--cfg_train), never by staging a shared
+# active file. Concurrent launches of different stages on one clone are safe.
 
 ts=$(date +%Y%m%d_%H%M%S)
 LOG=logs/fr3_xhand_ap2ap/ppo/dex4d-fr3xhand-stage3-from-${LABEL}_$ts
@@ -30,6 +30,7 @@ mkdir -p "$LOG"
 python train.py --task=FR3XHandAP2AP --algo=ppo --seed=0 \
   --rl_device=cuda:0 --sim_device=cuda:0 \
   --logdir="$LOG" --headless --max_iterations=$MAX_ITER \
+  --cfg_env cfg/fr3_xhand_ap2ap_stage_3.yaml --cfg_train cfg/ppo/config_stage_3.yaml \
   --model_dir="$CKPT" \
   --wandb_project play --wandb_entity draftrec \
   --capture_viewer --capture_viewer_url_check error \
