@@ -31,6 +31,35 @@ DTB_ASSETS = '/home/nas5/sibeenkim/work/simtoolreal-020/assets/urdf/dextoolbench
 Z_SHIFT = 0.22
 K_GOALS = 10
 N_TRAJ = 10
+# IsaacGym's VHACD path corrupts the heap on this host's glibc (aborts with
+# free(): invalid pointer or corrupted size right after the decomposition
+# lines). Benchmark units therefore load a generated per-piece urdf built from
+# the shipped coacd_convex_piece_*.obj files with VHACD off: one convex hull
+# per coacd piece, the true decomposition, the same visual mesh.
+
+
+def generate_pieces_urdf(code, suffix, out_dir, repo_dir):
+    coacd_dir = osp.abspath(osp.join(repo_dir, '..', 'assets', 'meshdatav3_scaled', code, 'coacd'))
+    pieces = sorted(glob.glob(osp.join(coacd_dir, 'coacd_convex_piece_*.obj')))
+    assert pieces, coacd_dir
+    scale = SCALE_BY_SUFFIX[suffix]
+    vis = osp.join(coacd_dir, f'decomposed_{suffix}.obj')
+    assert osp.exists(vis), vis
+    # pieces are at canonical scale, decomposed_<suffix>.obj is pre-scaled
+    # (verified: decomposed_008 extents = 0.08 x decomposed extents exactly)
+    lines = ['<robot name="root">', '  <link name="link_001">',
+             '    <visual><origin xyz="0 0 0" rpy="0 0 0"/><geometry>',
+             f'      <mesh filename="{vis}" scale="1 1 1"/>',
+             '    </geometry></visual>']
+    for p in pieces:
+        lines += ['    <collision><origin xyz="0 0 0" rpy="0 0 0"/><geometry>',
+                  f'      <mesh filename="{p}" scale="{scale} {scale} {scale}"/>',
+                  '    </geometry></collision>']
+    lines += ['  </link>', '</robot>']
+    path = osp.join(out_dir, 'object_pieces.urdf')
+    with open(path, 'w') as f:
+        f.write('\n'.join(lines))
+    return path
 
 
 def safe_key(key):
@@ -69,6 +98,10 @@ def build_cfg(key, set_name, out_dir, repo_dir):
     else:
         code, suffix = key.split('@')
         cfg['env']['object_code_dict'] = {code: [SCALE_BY_SUFFIX[suffix]]}
+        cfg['env']['benchmark_object_urdf'] = generate_pieces_urdf(code, suffix, out_dir, repo_dir)
+        # reference keypoint source, byte-identical extraction
+        cfg['env']['benchmark_keypoint_mesh'] = osp.abspath(osp.join(
+            repo_dir, '..', 'assets', 'meshdatav3_scaled', code, 'coacd', f'decomposed_{suffix}.obj'))
     bank_path = osp.join(BANK_DIR, f'{safe_key(key)}.json')
     assert osp.exists(bank_path), bank_path
     cfg['env']['benchmark_bank_json'] = bank_path

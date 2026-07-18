@@ -69,7 +69,9 @@ def main():
             if proc.poll() is not None:
                 lf.close()
                 running.remove((proc, job, lf))
-                if proc.returncode != 0:
+                # gdb-wrapped: the wrapper exits 0 regardless, the mp4 is the verdict
+                ok = proc.returncode == 0 and osp.exists(job['out']) and osp.getsize(job['out']) > 0
+                if not ok:
                     failed.add(job['out'])
                     with open(osp.join(VIDEOS, 'render_failed.txt'), 'a') as f:
                         f.write(job['name'] + '\n')
@@ -88,9 +90,9 @@ def main():
                 slot += 1
                 lf = open(job['out'] + '.log', 'w')
                 proc = subprocess.Popen(
-                    [sys.executable, 'render_replay_020.py', '--npz', job['npz'],
-                     '--traj', str(job['traj']), '--object_urdf', job['urdf'],
-                     '--out', job['out']],
+                    [sys.executable, osp.join(REPO, 'render_replay_020.py'),
+                     '--npz', job['npz'], '--traj', str(job['traj']),
+                     '--object_urdf', job['urdf'], '--out', job['out']],
                     cwd=REPO, stdout=lf, stderr=subprocess.STDOUT, env=env)
                 running.append((proc, job, lf))
                 launched += 1

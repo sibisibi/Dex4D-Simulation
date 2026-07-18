@@ -524,6 +524,12 @@ class XArm6LeapHandAP2AP(BaseTask):
             object_asset_options.vhacd_params = gymapi.VhacdParams()
             object_asset_options.vhacd_params.resolution = 300000
             object_asset_options.default_dof_drive_mode = gymapi.DOF_MODE_NONE
+            if self.benchmark_bank_json is not None:
+                # IsaacGym's VHACD path corrupts the heap on this host's glibc
+                # (free(): invalid pointer / corrupted size aborts right after the
+                # decomposition lines). Benchmark units load a pre-decomposed
+                # per-piece urdf instead (driver generates it), VHACD off.
+                object_asset_options.vhacd_enabled = False
             object_asset = None
             goal_asset_options = deepcopy(object_asset_options)
             goal_asset_options.disable_gravity = True # floating in the air
