@@ -1,7 +1,7 @@
 """020 replay renderer for Dex4D, kinematic playback of a saved rollout.
 
 Mirrors simtoolreal-020/dextoolbench/render_replay_isaacgym.py: rebuild the
-Dex4D scene (table, XArm6+Leap, object, red goal ghost) with gravity zeroed,
+Dex4D scene (table, XArm6+Leap, object, green goal ghost (locked convention)) with gravity zeroed,
 then per logged step write robot dof state, object root pose, and goal root
 pose into the sim tensors, pin the PD targets to the same joints, run ONE
 physics tick so PhysX propagates dof state into link transforms, and capture
