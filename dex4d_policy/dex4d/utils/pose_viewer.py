@@ -249,8 +249,11 @@ class Dex4DPoseViewer:
             object_urdf_raw, str(object_urdf_path.parent), strip_materials=True
         )
 
-        origin = task.gym.get_env_origin(task.envs[self.env_id])
-        self._origin = np.array([origin.x, origin.y, origin.z], dtype=np.float32)
+        # This codebase keeps root_state_tensor values env-local (resets write the
+        # raw create_actor poses back, UniDexGrasp lineage), so NO origin subtraction.
+        # The SimToolReal original subtracts get_env_origin because IsaacLab root
+        # states are world-frame; the conventions differ, do not re-add it here.
+        self._origin = np.zeros(3, dtype=np.float32)
         self._robot_index = int(task.robot_indices[self.env_id])
         self._object_index = int(task.object_indices[self.env_id])
         self._goal_index = int(task.goal_object_indices[self.env_id])
