@@ -9,6 +9,8 @@ cd "$(dirname "$0")/.."
 GPU=$1
 SHARD=$2
 test -f "$SHARD"
+# expected startup aborts would otherwise pipe multi-GB cores through apport
+ulimit -c 0
 
 CONDA_ROOT=${CONDA_ROOT:-$(ls -d /home/nas*/sibeenkim/anaconda3 2>/dev/null | head -1)}
 source $CONDA_ROOT/etc/profile.d/conda.sh

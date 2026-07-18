@@ -124,6 +124,22 @@ class XArm6LeapHandAP2AP(BaseTask):
         self.benchmark_keypoint_mesh = self.cfg["env"].get("benchmark_keypoint_mesh", None)
         self.benchmark_zero_feat = self.cfg["env"].get("benchmark_zero_feat", False)
 
+        # A latent PhysX bug in the shipped IsaacGym binary (PxArray grow inside
+        # Sc::ArticulationSim::addBody frees a non-heap pointer) aborts the
+        # process on this host's glibc for some units, deterministically per
+        # allocation sequence. benchmark_alloc_pad != 0 perturbs the heap layout
+        # with seeded malloc ballast BEFORE create_sim so a retried launch walks
+        # a different sequence. Ballast only, no computed value changes.
+        alloc_pad = self.cfg["env"].get("benchmark_alloc_pad", 0)
+        if alloc_pad:
+            rng = np.random.RandomState(alloc_pad)
+            keep = []
+            for _ in range(2000):
+                a = np.empty(int(rng.randint(1, 2048) * 64 + rng.randint(0, 64)), dtype=np.uint8)
+                if rng.rand() < 0.25:
+                    keep.append(a)
+            self._benchmark_alloc_ballast = keep
+
         super().__init__(cfg=self.cfg, enable_camera_sensors=enable_camera_sensors)
 
         if self.viewer != None:
@@ -625,6 +641,13 @@ class XArm6LeapHandAP2AP(BaseTask):
         # compute aggregate size. NOTE: for larger set of training objects, increase the max_agg_bodies and max_agg_shapes (x50 or more)
         max_agg_bodies = self.num_robot_bodies * 1 + 50 * self.num_object_bodies + 1  ##
         max_agg_shapes = self.num_robot_shapes * 1 + 50 * self.num_object_shapes + 1  ##
+        # benchmark_scene_dice pads the aggregate CAPACITY only (no actor, no
+        # shape, no physical effect): it resizes PhysX's internal pool
+        # allocations so a retried launch dodges the PxArray adjacency that
+        # trips the latent ArticulationSim::addBody free on this host.
+        scene_dice = self.cfg["env"].get("benchmark_scene_dice", 0)
+        max_agg_bodies += scene_dice * 17
+        max_agg_shapes += scene_dice * 31
 
         self.robots = []
         self.envs = []

@@ -81,7 +81,7 @@ def resolve_render_urdf(key, set_name, repo_dir):
     return osp.abspath(osp.join(repo_dir, '..', 'assets', 'meshdatav3_scaled', code, 'coacd', f'coacd_{suffix}.urdf'))
 
 
-def build_cfg(key, set_name, out_dir, repo_dir):
+def build_cfg(key, set_name, out_dir, repo_dir, alloc_pad=0):
     with open(osp.join(repo_dir, 'cfg', 'xarm6_leap_hand_ap2ap.yaml')) as f:
         cfg = yaml.safe_load(f)
     del cfg['env']['object_code_dict_file']
@@ -106,6 +106,8 @@ def build_cfg(key, set_name, out_dir, repo_dir):
     assert osp.exists(bank_path), bank_path
     cfg['env']['benchmark_bank_json'] = bank_path
     cfg['env']['benchmark_output_dir'] = out_dir
+    cfg['env']['benchmark_alloc_pad'] = alloc_pad
+    cfg['env']['benchmark_scene_dice'] = alloc_pad
     cfg_path = osp.join(out_dir, 'cfg_env.yaml')
     with open(cfg_path, 'w') as f:
         yaml.safe_dump(cfg, f)
@@ -178,20 +180,26 @@ def main():
     repo_dir = osp.dirname(osp.abspath(__file__))
     out_dir = osp.abspath(args.out_dir)
     os.makedirs(out_dir, exist_ok=True)
-    cfg_path, bank_path = build_cfg(args.key, args.set, out_dir, repo_dir)
 
-    cmd = [sys.executable, '-u', 'train.py', '--task=XArm6LeapHandAP2AP', '--algo=ppo', '--seed=0',
-           '--rl_device=cuda:0', '--sim_device=cuda:0', '--headless', '--test',
-           f'--model_dir={args.model_dir}', f'--num_envs={N_TRAJ}', f'--cfg_env={cfg_path}']
-    # IsaacGym on this host probabilistically aborts during scene creation
-    # (glibc heap-integrity trip in the asset import path, object-independent,
-    # before any rollout step). A startup abort produced no outputs, so a loud
-    # bounded retry is unbiased: completed runs are seeded and identical.
-    attempts = 5
+    # A latent PhysX bug in the shipped IsaacGym binary aborts scene creation
+    # for some units (glibc heap-integrity trip inside ArticulationSim::addBody,
+    # deterministic per allocation sequence, before any rollout step). Each
+    # retry passes a different benchmark_alloc_pad seed so the env perturbs the
+    # heap layout and walks a different sequence. A startup abort produced no
+    # outputs, so retries are unbiased: completed runs are seeded and identical.
+    attempts = 8
     for attempt in range(1, attempts + 1):
-        log_path = osp.join(out_dir, f'train.log' if attempt == 1 else f'train.attempt{attempt}.log')
+        cfg_path, bank_path = build_cfg(args.key, args.set, out_dir, repo_dir, alloc_pad=attempt - 1)
+        cmd = [sys.executable, '-u', 'train.py', '--task=XArm6LeapHandAP2AP', '--algo=ppo', '--seed=0',
+               '--rl_device=cuda:0', '--sim_device=cuda:0', '--headless', '--test',
+               f'--model_dir={args.model_dir}', f'--num_envs={N_TRAJ}', f'--cfg_env={cfg_path}']
+        log_path = osp.join(out_dir, 'train.log' if attempt == 1 else f'train.attempt{attempt}.log')
+        # PYTHONHASHSEED and MALLOC_TOP_PAD_ vary per attempt: independent
+        # startup-layout dice on top of the in-env ballast
+        env = dict(os.environ, PYTHONHASHSEED=str(attempt),
+                   MALLOC_TOP_PAD_=str((attempt - 1) * 131072))
         with open(log_path, 'w') as lf:
-            proc = subprocess.run(cmd, cwd=repo_dir, stdout=lf, stderr=subprocess.STDOUT)
+            proc = subprocess.run(cmd, cwd=repo_dir, stdout=lf, stderr=subprocess.STDOUT, env=env)
         if proc.returncode == 0:
             break
         assert not osp.exists(osp.join(out_dir, 'native_summary.json')), \
