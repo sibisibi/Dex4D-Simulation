@@ -23,6 +23,7 @@ from isaacgym import gymtorch
 from isaacgym import gymapi
 from utils.util import visualize_point_isaacgym, visualize_axes_isaacgym
 from copy import deepcopy
+import json
 import yaml
 
 from utils.util import sample_position, sample_rotation, compute_keypoints, extract_mesh_keypoints, keypoint_local_to_world, mask_keypoints_oneside, mask_keypoints_test_time, mask_object_goal_keypoints_test_time, compute_fingertip_to_object_vecs, mask_object_goal_keypoints_random_height_test_time
@@ -114,6 +115,14 @@ class XArm6LeapHandAP2AP(BaseTask):
             "goal_object": 4,
         }
         self.table_dims = gymapi.Vec3(1.2, 1.2, 0.6)
+
+        # 020 benchmark cfg keys (default null keeps the reference behavior
+        # byte-identical). Read before super().__init__ because _create_envs runs
+        # inside it; the tensor buffers are built after, once device exists.
+        self.benchmark_bank_json = self.cfg["env"].get("benchmark_bank_json", None)
+        self.benchmark_object_urdf = self.cfg["env"].get("benchmark_object_urdf", None)
+        self.benchmark_keypoint_mesh = self.cfg["env"].get("benchmark_keypoint_mesh", None)
+        self.benchmark_zero_feat = self.cfg["env"].get("benchmark_zero_feat", False)
 
         super().__init__(cfg=self.cfg, enable_camera_sensors=enable_camera_sensors)
 
@@ -238,12 +247,19 @@ class XArm6LeapHandAP2AP(BaseTask):
         self.delta_x_range = self.cfg["env"]["delta_x_range"]
         self.delta_y_range = self.cfg["env"]["delta_y_range"]
 
+        if self.benchmark_bank_json is not None:
+            self._init_benchmark_bank()
 
         self.update_curriculum()
 
     def create_sim(self):
         self.dt = self.sim_params.dt
         self.up_axis_idx = self.set_sim_params_up_axis(self.sim_params, self.up_axis)
+        if self.benchmark_bank_json is not None and self.graphics_device_id == -1:
+            # BaseTask forces graphics -1 for headless-no-camera, but on the yj hosts
+            # that path aborts (free(): invalid pointer) inside create_actor for the
+            # robot asset. Keep the cfg graphics device for offscreen EGL instead.
+            self.graphics_device_id = self.cfg.get("graphics_device_id", self.device_id)
         self.sim = super().create_sim(self.device_id, self.graphics_device_id, self.physics_engine, self.sim_params)
         self._create_ground_plane()
         self._create_envs(self.num_envs, self.cfg["env"]['envSpacing'], int(np.sqrt(self.num_envs)))
@@ -377,7 +393,10 @@ class XArm6LeapHandAP2AP(BaseTask):
         asset_root = "../../assets"
         robot_asset_file = "urdf/xarm6_leap_description/xarm6_leap_left_2023.urdf"
         table_texture_files = "../assets/textures/texture_stone_stone_texture_0.jpg"
-        table_texture_handle = self.gym.create_texture_from_file(self.sim, table_texture_files)
+        # headless benchmark runs have no graphics context (graphics_device_id -1,
+        # set by BaseTask); creating a texture there is a hard crash
+        if self.graphics_device_id != -1:
+            table_texture_handle = self.gym.create_texture_from_file(self.sim, table_texture_files)
 
         if "asset" in self.cfg["env"]:
             asset_root = self.cfg["env"]["asset"].get("assetRoot", asset_root)
@@ -455,6 +474,8 @@ class XArm6LeapHandAP2AP(BaseTask):
             0.12: '012',
             0.15: '015',
         }
+        if self.benchmark_object_urdf is not None:
+            scale2str[1.0] = '100'  # DexToolBench meshes are metric, scale 1.0
 
         object_scale_idx_pairs = []
         visual_feat_root = osp.realpath(osp.join(assets_path, 'meshdatav3_pc_feat'))
@@ -474,10 +495,16 @@ class XArm6LeapHandAP2AP(BaseTask):
                     object_scale_idx_pairs.append([object_id, scale_id])
                 else:
                     print(f'prior not found: {object_code}/{scale}')
-                file_dir = osp.join(visual_feat_root, f'{object_code}/pc_feat_{scale2str[scale]}.npy')
-                with open(file_dir, 'rb') as f:
-                    feat = np.load(f)
-                self.visual_feat_data[object_id][scale_id] = torch.tensor(feat, device=self.device)        
+                if self.benchmark_zero_feat:
+                    # DexToolBench objects have no pc_feat: the upstream encoder
+                    # weights were never released (UniDexGrasp issues 19 and 25), so
+                    # matching features cannot be generated. Protocol: 64-dim zero.
+                    feat = np.zeros(64, dtype=np.float32)
+                else:
+                    file_dir = osp.join(visual_feat_root, f'{object_code}/pc_feat_{scale2str[scale]}.npy')
+                    with open(file_dir, 'rb') as f:
+                        feat = np.load(f)
+                self.visual_feat_data[object_id][scale_id] = torch.tensor(feat, device=self.device)
 
         object_asset_dict = {}
         goal_asset_dict = {}
@@ -504,11 +531,20 @@ class XArm6LeapHandAP2AP(BaseTask):
             for obj_id, scale_id in object_scale_idx_pairs:
                 if obj_id == object_id:
                     scale_str = scale2str[self.id2scale[scale_id]]
-                    scaled_object_asset_file = object_code + f"/coacd/coacd_{scale_str}.urdf"
-                    scaled_object_asset = self.gym.load_asset(self.sim, mesh_path, scaled_object_asset_file,
-                                                              object_asset_options)
-                    scaled_goal_asset = self.gym.load_asset(self.sim, mesh_path, scaled_object_asset_file,
-                                                            goal_asset_options)
+                    if self.benchmark_object_urdf is not None:
+                        # DexToolBench injection: pre-decomposed metric urdf outside
+                        # the meshdata tree, keypoints from the visual mesh
+                        urdf_dir, urdf_file = osp.split(self.benchmark_object_urdf)
+                        scaled_object_asset = self.gym.load_asset(self.sim, urdf_dir, urdf_file,
+                                                                  object_asset_options)
+                        scaled_goal_asset = self.gym.load_asset(self.sim, urdf_dir, urdf_file,
+                                                                goal_asset_options)
+                    else:
+                        scaled_object_asset_file = object_code + f"/coacd/coacd_{scale_str}.urdf"
+                        scaled_object_asset = self.gym.load_asset(self.sim, mesh_path, scaled_object_asset_file,
+                                                                  object_asset_options)
+                        scaled_goal_asset = self.gym.load_asset(self.sim, mesh_path, scaled_object_asset_file,
+                                                                goal_asset_options)
                     if obj_id not in object_asset_dict:
                         object_asset_dict[object_id] = {}
                         goal_asset_dict[object_id] = {}
@@ -518,7 +554,11 @@ class XArm6LeapHandAP2AP(BaseTask):
                     if object_asset is None:
                         object_asset = scaled_object_asset
 
-                    mesh_file = osp.join(mesh_path, object_code, f"coacd/decomposed_{scale_str}.obj")
+                    if self.benchmark_keypoint_mesh is not None:
+                        assert osp.exists(self.benchmark_keypoint_mesh), self.benchmark_keypoint_mesh
+                        mesh_file = self.benchmark_keypoint_mesh
+                    else:
+                        mesh_file = osp.join(mesh_path, object_code, f"coacd/decomposed_{scale_str}.obj")
                     if osp.exists(mesh_file):
                         keypoints = extract_mesh_keypoints(mesh_file, self.num_keypoints, seed=object_id*10+scale_id)
                         keypoints = torch.tensor(keypoints, device=self.device)
@@ -705,7 +745,8 @@ class XArm6LeapHandAP2AP(BaseTask):
 
             # add table
             table_handle = self.gym.create_actor(env_ptr, table_asset, table_pose, "table", i, -1, self.segmentation_id["table"])
-            self.gym.set_rigid_body_texture(env_ptr, table_handle, 0, gymapi.MESH_VISUAL, table_texture_handle)
+            if self.graphics_device_id != -1:
+                self.gym.set_rigid_body_texture(env_ptr, table_handle, 0, gymapi.MESH_VISUAL, table_texture_handle)
             table_idx = self.gym.get_actor_index(env_ptr, table_handle, gymapi.DOMAIN_SIM)
             self.table_indices.append(table_idx)
 
@@ -1076,7 +1117,8 @@ class XArm6LeapHandAP2AP(BaseTask):
         ], dim=1)
 
         
-        if self.cfg['test'] and visualize:
+        # benchmark runs are headless with no viewer, the point-flow draw needs one
+        if self.cfg['test'] and visualize and self.benchmark_bank_json is None:
             # points = torch.concat([self.right_hand_pos.unsqueeze(1), self.right_hand_ff_pos.unsqueeze(1), self.right_hand_mf_pos.unsqueeze(1), self.right_hand_rf_pos.unsqueeze(1), self.right_hand_th_pos.unsqueeze(1)], dim=1)
             # visualize_point_isaacgym(self, points, radius=0.01, selected_ids=set([0, self.cfg['vis_env_id']]))
             self._visualize_point_flow(self.object_keypoints, self.goal_keypoints, num_timesteps=5)
@@ -1115,6 +1157,10 @@ class XArm6LeapHandAP2AP(BaseTask):
 
         new_object_rot = quat_from_euler_xyz(roll_angles, pitch_angles, theta)
         new_object_pos = self.object_init_state[env_ids, 0:3].clone() + torch.cat([delta_xy, torch.zeros((len(env_ids), 1), device=self.device)], dim=-1)
+        if self.benchmark_bank_json is not None:
+            # bank start rows override the random draw (z already mapped +0.22 at load)
+            new_object_pos = self.benchmark_start_pos[env_ids]
+            new_object_rot = self.benchmark_start_rot[env_ids]
         prior_rot_z = get_euler_xyz(quat_mul(new_object_rot, self.target_hand_rot[env_ids]))[2]
 
         # coordinate transform according to theta(object)/ prior_rot_z(hand)
@@ -1125,7 +1171,17 @@ class XArm6LeapHandAP2AP(BaseTask):
         self.root_state_tensor[self.object_indices[env_ids], 7:13] = torch.zeros_like(self.root_state_tensor[self.object_indices[env_ids], 7:13])
 
     def reset_goal_pose(self, env_ids, init=False):
-        if init:
+        if self.benchmark_bank_json is not None:
+            if init:
+                self.benchmark_goal_idx[env_ids] = 0
+                self.benchmark_goal_clock[env_ids] = 0
+            # place the goal at the env's current bank-sequence index. The index
+            # advances in _benchmark_post_reward on each achieved goal; after the
+            # K-th goal the episode ends, the clamp only covers that final call.
+            seq_idx = torch.clamp(self.benchmark_goal_idx[env_ids], max=self.benchmark_k_goals - 1)
+            self.goal_state[env_ids, 0:3] = self.benchmark_goal_seq[env_ids, seq_idx, 0:3]
+            self.goal_state[env_ids, 3:7] = self.benchmark_goal_seq[env_ids, seq_idx, 3:7]
+        elif init:
             # self.goal_state[env_ids] = self.goal_init_state[env_ids].clone()
             self.goal_state[env_ids, :3] = self.root_state_tensor[self.object_indices[env_ids], 0:3].clone() + self.goal_displacement_tensor
             self.goal_state[env_ids, 3:7] = self.root_state_tensor[self.object_indices[env_ids], 3:7].clone()
@@ -1284,8 +1340,8 @@ class XArm6LeapHandAP2AP(BaseTask):
             # self.cur_targets.fill_(0)
             self.gym.set_dof_position_target_tensor(self.sim, gymtorch.unwrap_tensor(self.cur_targets))
 
-        # if self.cfg['test']: # record and visualize trajectory
-        #     self.record_trajectory() # this MIGHT be before the update since haven't refreshed
+        if self.cfg['test']: # record and visualize trajectory
+            self.record_trajectory() # this MIGHT be before the update since haven't refreshed
 
     def post_physics_step(self):
         self.progress_buf += 1
@@ -1450,10 +1506,15 @@ class XArm6LeapHandAP2AP(BaseTask):
 
 
         self.rew_buf = reward
-        self.check_termination()
-        self.reset_goal_buf = torch.where(self.achieved_buf >= self.achieved_last_time, torch.ones_like(self.reset_goal_buf), self.reset_buf)
-        self.consecutive_successes = torch.where(self.achieved_buf >= self.achieved_last_time, self.consecutive_successes + 1, self.consecutive_successes)
-        self.achieved_buf = torch.where(self.reset_goal_buf == 1, torch.zeros_like(self.achieved_buf), self.achieved_buf)
+        if self.benchmark_bank_json is not None:
+            # SimToolReal gate and per-goal clock replace the native 5cm/30-step
+            # keypoint gate and the 400-step episode timeout (check_termination).
+            self._benchmark_post_reward()
+        else:
+            self.check_termination()
+            self.reset_goal_buf = torch.where(self.achieved_buf >= self.achieved_last_time, torch.ones_like(self.reset_goal_buf), self.reset_buf)
+            self.consecutive_successes = torch.where(self.achieved_buf >= self.achieved_last_time, self.consecutive_successes + 1, self.consecutive_successes)
+            self.achieved_buf = torch.where(self.reset_goal_buf == 1, torch.zeros_like(self.achieved_buf), self.achieved_buf)
         
         self.successes = torch.where(self.goal_obj_dist <= self.success_threshold, torch.ones_like(self.successes), self.successes)
         self.current_successes = torch.where(self.reset_buf == 1, self.successes, self.current_successes)
@@ -1602,6 +1663,123 @@ class XArm6LeapHandAP2AP(BaseTask):
         if not hasattr(self, 'object_trajectory'):
             self.object_trajectory = []
         self.object_trajectory.append(object_trajectory)
+
+    def _init_benchmark_bank(self):
+        '''
+        020 benchmark state. Bank poses live in the SimToolReal env frame whose
+        table top is z=0.38 (gen_goal_banks.py TABLE_Z). Dex4D's table top is z=0.6
+        (table box is 0.6 tall, table actor centered at x,y=(0,0)), so every bank z
+        gets +0.22. x,y pass through unchanged, both frames center the table at the
+        origin. Bank quats are WXYZ, IsaacGym wants XYZW.
+        '''
+        with open(self.benchmark_bank_json) as f:
+            bank = json.load(f)
+        n_traj = bank['metadata']['n_trajectories']
+        assert n_traj == self.num_envs, \
+            f"bank has {n_traj} trajectories, num_envs={self.num_envs} (env i = trajectory i)"
+        z_shift = 0.22
+        start_pos = torch.tensor(bank['start_pos'], dtype=torch.float, device=self.device)
+        start_pos[:, 2] += z_shift
+        sq = torch.tensor(bank['start_quat_wxyz'], dtype=torch.float, device=self.device)
+        self.benchmark_start_pos = start_pos
+        self.benchmark_start_rot = torch.cat([sq[:, 1:4], sq[:, 0:1]], dim=1)  # wxyz -> xyzw
+        # what every reset applies, saved to the npz for offline verification
+        self.benchmark_start_applied = torch.cat([self.benchmark_start_pos, self.benchmark_start_rot], dim=-1)
+        goal_pos = torch.tensor(bank['pos'], dtype=torch.float, device=self.device)
+        goal_pos[:, :, 2] += z_shift
+        gq = torch.tensor(bank['quat_wxyz'], dtype=torch.float, device=self.device)
+        goal_rot = torch.cat([gq[..., 1:4], gq[..., 0:1]], dim=-1)
+        self.benchmark_goal_seq = torch.cat([goal_pos, goal_rot], dim=-1)  # (N, K, 7) pos + quat xyzw
+        self.benchmark_k_goals = self.benchmark_goal_seq.shape[1]
+        self.benchmark_goal_idx = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+        # SimToolReal success gate: max corner distance of a fixed box <= 0.015 m for
+        # a single step. Corners are 4 offsets times half-extents
+        # (0.141, 0.03025, 0.0271) * 1.5 / 2, placed at object pose and goal pose.
+        half_extents = torch.tensor([0.141, 0.03025, 0.0271], dtype=torch.float, device=self.device) * 1.5 / 2
+        offsets = torch.tensor([[1.0, 1.0, 1.0], [1.0, 1.0, -1.0], [-1.0, -1.0, 1.0], [-1.0, -1.0, -1.0]],
+                               dtype=torch.float, device=self.device)
+        self.benchmark_box_corners = offsets * half_extents  # (4, 3)
+        self.benchmark_gate_threshold = 0.015
+        # SimToolReal per-goal clock: 600 policy steps without achieving the current
+        # goal ends the episode. Replaces Dex4D's 400-step episodeLength timeout.
+        self.benchmark_goal_budget = 600
+        self.benchmark_goal_clock = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+        # first-episode per-step recording
+        self.benchmark_recording = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
+        self.benchmark_ep_len = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+        self.benchmark_final_goals = torch.full((self.num_envs,), -1, dtype=torch.long, device=self.device)
+        self.benchmark_rows = {'joint': [], 'obj': [], 'goal': [], 'successes': []}
+
+    def _benchmark_post_reward(self):
+        '''
+        Benchmark replacement for the native gate block in compute_reward.
+        SimToolReal gate, per-goal clock, goal advance, termination (episode ends
+        the moment the K-th goal is achieved, or when the clock runs out), and
+        first-episode per-step recording.
+        '''
+        n = self.num_envs
+        corners = self.benchmark_box_corners.unsqueeze(0).expand(n, 4, 3).reshape(-1, 3)
+        obj_rot4 = self.object_rot.unsqueeze(1).expand(n, 4, 4).reshape(-1, 4)
+        goal_rot4 = self.goal_rot.unsqueeze(1).expand(n, 4, 4).reshape(-1, 4)
+        obj_corners = self.object_pos.unsqueeze(1) + quat_apply(obj_rot4, corners).view(n, 4, 3)
+        goal_corners = self.goal_pos.unsqueeze(1) + quat_apply(goal_rot4, corners).view(n, 4, 3)
+        max_corner_dist = (obj_corners - goal_corners).norm(p=2, dim=-1).max(dim=1).values
+        achieved = max_corner_dist <= self.benchmark_gate_threshold
+
+        self.benchmark_goal_clock += 1
+        self.benchmark_goal_clock = torch.where(achieved, torch.zeros_like(self.benchmark_goal_clock),
+                                                self.benchmark_goal_clock)
+        self.benchmark_goal_idx = torch.where(achieved,
+                                              torch.clamp(self.benchmark_goal_idx + 1, max=self.benchmark_k_goals),
+                                              self.benchmark_goal_idx)
+
+        exhausted = self.benchmark_goal_idx >= self.benchmark_k_goals
+        clock_out = self.benchmark_goal_clock >= self.benchmark_goal_budget
+        self.reset_buf = torch.where(exhausted | clock_out, torch.ones_like(self.reset_buf), self.reset_buf)
+        # mirrors the native line: advance the goal on achievement, re-init on reset
+        self.reset_goal_buf = torch.where(achieved, torch.ones_like(self.reset_goal_buf), self.reset_buf)
+
+        if bool(self.benchmark_recording.any()):
+            self.benchmark_rows['joint'].append(self.robot_dof_pos.cpu().numpy().copy())
+            self.benchmark_rows['obj'].append(self.object_pose.cpu().numpy().copy())
+            self.benchmark_rows['goal'].append(self.goal_pose.cpu().numpy().copy())
+            # cumulative goals reached after this step (the increments mark the
+            # achievement steps, enabling offline re-scoring)
+            self.benchmark_rows['successes'].append(self.benchmark_goal_idx.cpu().numpy().copy())
+            ending = self.benchmark_recording & (self.reset_buf == 1)
+            if bool(ending.any()):
+                self.benchmark_ep_len[ending] = len(self.benchmark_rows['joint'])
+                self.benchmark_final_goals[ending] = self.benchmark_goal_idx[ending]
+                self.benchmark_recording = self.benchmark_recording & ~ending
+
+    def save_benchmark_results(self):
+        out_dir = self.cfg['env']['benchmark_output_dir']
+        os.makedirs(out_dir, exist_ok=True)
+        assert not bool(self.benchmark_recording.any()), "unfinished first episodes at save time"
+        joint = np.stack(self.benchmark_rows['joint'])      # (T, n, 22)
+        obj = np.stack(self.benchmark_rows['obj'])          # (T, n, 7)
+        goal = np.stack(self.benchmark_rows['goal'])        # (T, n, 7)
+        succ = np.stack(self.benchmark_rows['successes'])   # (T, n)
+        ep_len = self.benchmark_ep_len.cpu().numpy()
+        arrays = {'start_applied': self.benchmark_start_applied.cpu().numpy()}
+        for i in range(self.num_envs):
+            t = int(ep_len[i])
+            arrays[f'joint_{i}'] = joint[:t, i]
+            arrays[f'obj_{i}'] = obj[:t, i]
+            arrays[f'goal_{i}'] = goal[:t, i]
+            arrays[f'successes_{i}'] = succ[:t, i]
+        np.savez_compressed(os.path.join(out_dir, 'poses.npz'), **arrays)
+        summary = {
+            'k_goals': int(self.benchmark_k_goals),
+            'goals_reached': self.benchmark_final_goals.cpu().numpy().tolist(),
+            'ep_len': ep_len.tolist(),
+            'gate': {'type': 'simtoolreal-box-corner-max',
+                     'threshold_m': self.benchmark_gate_threshold,
+                     'per_goal_step_budget': self.benchmark_goal_budget},
+        }
+        with open(os.path.join(out_dir, 'native_summary.json'), 'w') as f:
+            json.dump(summary, f, indent=1)
+        print(f"===> Saved benchmark results to {out_dir}")
 
     def update_curriculum(self):
         if self.curriculum:

@@ -151,6 +151,42 @@ class PPO:
         if self.is_testing:
             self.vec_env.task.iteration = self.current_learning_iteration
             self.vec_env.task.update_curriculum()
+            if getattr(self.vec_env.task, 'benchmark_bank_json', None) is not None:
+                # 020 benchmark test loop. Envs finish asynchronously (per-goal
+                # 600-step budget, immediate end after the K-th goal), so run until
+                # every env finished its first episode. No VideoRecorder/MetricWriter:
+                # they need a graphics device (headless benchmark has none) and their
+                # fixed paths next to the checkpoint would collide across the
+                # concurrent per-unit processes.
+                task = self.vec_env.task
+                max_steps = task.benchmark_k_goals * task.benchmark_goal_budget + 20
+                for i in tqdm(range(max_steps)):
+                    with torch.no_grad():
+                        actions = self.actor_critic.act_inference(current_obs)
+                        next_obs, rews, dones, infos = self.vec_env.step(actions, 0)
+                        current_obs.copy_(next_obs)
+                    if not bool(task.benchmark_recording.any()):
+                        break
+                out_dir = task.cfg['env']['benchmark_output_dir']
+                os.makedirs(out_dir, exist_ok=True)
+                model_name = self.model_dir.split('/')[-2]
+                model_iter = os.path.basename(self.model_dir).split('model_')[-1].split('.')[0]
+                # trajectory dumps mirror the dagger save pattern, redirected into
+                # the unit's output dir so concurrent units cannot clobber each other
+                save_path = os.path.join(out_dir, f'{model_name}_iter_{model_iter}_action_trajectory.npy')
+                np.save(save_path, np.array(task.action_trajectory, dtype=object))
+                print(f"===> Saved action trajectory to {save_path}")
+                save_path = os.path.join(out_dir, f'{model_name}_iter_{model_iter}_object_trajectory.npy')
+                np.save(save_path, np.array(task.object_trajectory, dtype=object))
+                print(f"===> Saved object trajectory to {save_path}")
+                task.save_benchmark_results()
+                # os._exit dodges the EGL teardown abort of the offscreen graphics
+                # context (same pattern as the SimToolReal replay renderer); all
+                # results are already flushed to disk at this point
+                import sys as _sys
+                _sys.stdout.flush()
+                _sys.stderr.flush()
+                os._exit(0)
             fps = round(
                 1 / (self.vec_env.task.sim_params.dt * self.vec_env.task.cfg["env"].get("controlFrequencyInv", 1))
             )
@@ -189,11 +225,20 @@ class PPO:
                 save_path = os.path.join(os.path.dirname(self.model_dir), f'{model_name}_iter_{model_iter}_action_trajectory.npy')
                 np.save(save_path, np.array(action_trajectory, dtype=object))
                 print(f"===> Saved action trajectory to {save_path}")
-                
+
                 # To load it back, use:
                 # loaded_trajectory = np.load(save_path, allow_pickle=True)
                 # loaded_trajectory = loaded_trajectory.tolist()
-            
+
+            # save the object trajectory (mirrors the dagger save pattern)
+            if hasattr(self.vec_env.task, 'object_trajectory'):
+                object_trajectory = self.vec_env.task.object_trajectory
+                model_name = self.model_dir.split('/')[-2]
+                model_iter = os.path.basename(self.model_dir).split('model_')[-1].split('.')[0]
+                save_path = os.path.join(os.path.dirname(self.model_dir), f'{model_name}_iter_{model_iter}_object_trajectory.npy')
+                np.save(save_path, np.array(object_trajectory, dtype=object))
+                print(f"===> Saved object trajectory to {save_path}")
+
             exit()
 
             # for rendering
