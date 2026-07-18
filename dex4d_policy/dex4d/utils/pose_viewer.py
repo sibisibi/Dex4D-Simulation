@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 import os.path as osp
+import random
 import struct
 import time
 import urllib.request
@@ -183,6 +184,8 @@ class Dex4DPoseViewer:
         self.capture_interval = int(capture_interval)
         self.env_id = int(env_id)
         self.wandb_key = wandb_key
+        # independent RNG so env resampling never perturbs the training seed
+        self._env_rng = random.Random(0xD3C4D)
 
         # robot URDF, embedded text with meshes rewritten to public raw URLs
         asset_root = task.cfg["env"]["asset"].get("assetRoot", "../../assets")
@@ -197,8 +200,43 @@ class Dex4DPoseViewer:
         )
         _check_url(_first_mesh_url(self._robot_urdf_text), url_check)
 
-        # object and goal URDF, env_id's assigned object with meshes inlined
+        # table URDF from the sim's box dims
+        dims = task.table_dims
+        self._table_urdf_text = TABLE_URDF.format(x=dims.x, y=dims.y, z=dims.z)
+
+        # embodiment-wide constants, identical across envs
+        self._joint_names = list(task.gym.get_actor_dof_names(task.envs[0], task.robots[0]))
+        assert len(self._joint_names) == task.robot_dof_pos.shape[1], (
+            "actor dof names ({}) do not match robot_dof_pos width ({})".format(
+                len(self._joint_names), task.robot_dof_pos.shape[1]
+            )
+        )
+        self._dt = float(task.sim_params.dt) * int(task.cfg["env"].get("controlFrequencyInv", 1))
+
+        self._step = 0
+        self._capture_index = 0
+        self._bind_env(self._env_rng.randrange(task.num_envs))
+        self._frames = []  # capture from step 1, first HTML lands at step capture_len
+
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        print(
+            "[pose_viewer] enabled: env resampled per capture, first env_id={} len={} interval={} object={}/{} output_dir={}".format(
+                self.env_id, self.capture_len, self.capture_interval,
+                self._code_scale["object_code"], self._code_scale["scale_str"], self.output_dir,
+            ),
+            flush=True,
+        )
+
+    def _bind_env(self, env_id):
+        """Bind every per-env constant. Called at construction and again at the
+        start of each capture window, so successive captures show different
+        envs and their assigned objects."""
+        task = self.task
+        self.env_id = int(env_id)
+
+        # object and goal URDF, this env's assigned object with meshes inlined
         code_scale = task.object_code_and_scale_str_for_envs[self.env_id]
+        self._code_scale = code_scale
         object_urdf_path = Path(osp.realpath(osp.join(
             "../assets/meshdatav3_scaled",
             code_scale["object_code"],
@@ -211,41 +249,17 @@ class Dex4DPoseViewer:
             object_urdf_raw, str(object_urdf_path.parent), strip_materials=True
         )
 
-        # table URDF from the sim's box dims
-        dims = task.table_dims
-        self._table_urdf_text = TABLE_URDF.format(x=dims.x, y=dims.y, z=dims.z)
-
-        # per-env constants
-        self._joint_names = list(task.gym.get_actor_dof_names(task.envs[self.env_id], task.robots[self.env_id]))
-        assert len(self._joint_names) == task.robot_dof_pos.shape[1], (
-            "actor dof names ({}) do not match robot_dof_pos width ({})".format(
-                len(self._joint_names), task.robot_dof_pos.shape[1]
-            )
-        )
         origin = task.gym.get_env_origin(task.envs[self.env_id])
         self._origin = np.array([origin.x, origin.y, origin.z], dtype=np.float32)
         self._robot_index = int(task.robot_indices[self.env_id])
         self._object_index = int(task.object_indices[self.env_id])
         self._goal_index = int(task.goal_object_indices[self.env_id])
         self._table_index = int(task.table_indices[self.env_id])
-        self._dt = float(task.sim_params.dt) * int(task.cfg["env"].get("controlFrequencyInv", 1))
-
-        self._step = 0
-        self._capture_index = 0
-        self._frames = []  # capture from step 1, first HTML lands at step capture_len
-
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        print(
-            "[pose_viewer] enabled: env_id={} len={} interval={} object={}/{} output_dir={}".format(
-                self.env_id, self.capture_len, self.capture_interval,
-                code_scale["object_code"], code_scale["scale_str"], self.output_dir,
-            ),
-            flush=True,
-        )
 
     def on_step(self):
         self._step += 1
         if self._frames is None and self.capture_interval > 0 and self._step % self.capture_interval == 0:
+            self._bind_env(self._env_rng.randrange(self.task.num_envs))
             self._frames = []
         if self._frames is not None:
             self._frames.append(self._capture_frame())
@@ -285,12 +299,17 @@ class Dex4DPoseViewer:
             robot_base_poses=np.stack([f["robot_base_pose"] for f in frames]),
             dt=self._dt,
         )
-        html_path = self.output_dir / "pose_viewer_step_{:09d}_{:04d}.html".format(self._step, self._capture_index)
+        html_path = self.output_dir / "pose_viewer_step_{:09d}_{:04d}_env{:05d}.html".format(
+            self._step, self._capture_index, self.env_id
+        )
         html_path.write_text(html_text, encoding="utf-8")
-        print("[pose_viewer] wrote {} frames to {}".format(len(frames), html_path), flush=True)
+        print("[pose_viewer] wrote {} frames (env {}, object {}/{}) to {}".format(
+            len(frames), self.env_id, self._code_scale["object_code"],
+            self._code_scale["scale_str"], html_path), flush=True)
 
         if wandb.run is not None:
-            wandb.log({self.wandb_key: wandb.Html(html_text)})
-            print("[pose_viewer] logged wandb Html key={} step={}".format(self.wandb_key, self._step), flush=True)
+            wandb.log({self.wandb_key: wandb.Html(html_text), "pose_viewer/env_id": self.env_id})
+            print("[pose_viewer] logged wandb Html key={} step={} env={}".format(
+                self.wandb_key, self._step, self.env_id), flush=True)
 
         self._capture_index += 1
