@@ -9,6 +9,7 @@ cd "$(dirname "$0")/.."
 GPU=$1
 CKPT=$2
 MAX_ITER=$3
+LABEL=${4:-zl0hpl7g}
 test -f "$CKPT"
 
 CONDA_ROOT=${CONDA_ROOT:-$(cd ~ && ls -d /home/nas*/sibeenkim/anaconda3 2>/dev/null | head -1)}
@@ -23,7 +24,7 @@ cp cfg/fr3_xhand_ap2ap_stage_3.yaml cfg/fr3_xhand_ap2ap.yaml
 cp cfg/ppo/config_stage_3.yaml cfg/ppo/config.yaml
 
 ts=$(date +%Y%m%d_%H%M%S)
-LOG=logs/fr3_xhand_ap2ap/ppo/dex4d-fr3xhand-stage3-from-zl0hpl7g_$ts
+LOG=logs/fr3_xhand_ap2ap/ppo/dex4d-fr3xhand-stage3-from-${LABEL}_$ts
 mkdir -p "$LOG"
 
 python train.py --task=FR3XHandAP2AP --algo=ppo --seed=0 \
