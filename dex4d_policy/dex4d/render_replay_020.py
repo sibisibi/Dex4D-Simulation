@@ -114,7 +114,9 @@ def main():
     object_actor = gym.create_actor(env, object_asset, start, 'object', 0, 0, 0)
     gym.set_rigid_body_color(env, object_actor, 0, gymapi.MESH_VISUAL, gymapi.Vec3(90 / 255, 94 / 255, 173 / 255))
     goal_actor = gym.create_actor(env, goal_asset, start, 'goal_object', 1, 0, 0)
-    gym.set_rigid_body_color(env, goal_actor, 0, gymapi.MESH_VISUAL, gymapi.Vec3(1, 0, 0))
+    # locked media convention: the goal ghost renders green (display only)
+    for b in range(gym.get_actor_rigid_body_count(env, goal_actor)):
+        gym.set_rigid_body_color(env, goal_actor, b, gymapi.MESH_VISUAL, gymapi.Vec3(0.20, 0.72, 0.31))
 
     table_pose = gymapi.Transform()
     table_pose.p = gymapi.Vec3(0.0, 0.0, 0.5 * TABLE_DIMS[2])
