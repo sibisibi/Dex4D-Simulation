@@ -165,7 +165,7 @@ class Dex4DPoseViewer:
         task,
         output_dir,
         capture_len=600,
-        capture_interval=6000,
+        capture_interval=1000,
         env_id=0,
         wandb_key="interactive_viewer",
         robot_raw_base="",
@@ -312,6 +312,7 @@ class Dex4DPoseViewer:
 
         if wandb.run is not None:
             wandb.log({self.wandb_key: wandb.Html(html_text), "pose_viewer/env_id": self.env_id})
+            wandb.run.summary["interactive_viewer_latest"] = wandb.Html(html_text)
             print("[pose_viewer] logged wandb Html key={} step={} env={}".format(
                 self.wandb_key, self._step, self.env_id), flush=True)
 
