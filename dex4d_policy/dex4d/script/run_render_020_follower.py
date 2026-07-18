@@ -62,20 +62,26 @@ def main():
 
     os.makedirs(VIDEOS, exist_ok=True)
     running = []  # (proc, job, log_file)
-    failed = set()  # never relaunched within this follower run
+    strikes = {}  # out path -> abort count; 3 strikes blacklists for this run
+    failed = set()
     slot = 0
     while True:
         for proc, job, lf in running[:]:
             if proc.poll() is not None:
                 lf.close()
                 running.remove((proc, job, lf))
-                # gdb-wrapped: the wrapper exits 0 regardless, the mp4 is the verdict
                 ok = proc.returncode == 0 and osp.exists(job['out']) and osp.getsize(job['out']) > 0
                 if not ok:
-                    failed.add(job['out'])
-                    with open(osp.join(VIDEOS, 'render_failed.txt'), 'a') as f:
-                        f.write(job['name'] + '\n')
-                    print(f"[FAIL] {job['name']} (rc {proc.returncode})")
+                    # IsaacGym startup aborts are probabilistic on this host,
+                    # retry up to 3 times before recording the failure
+                    strikes[job['out']] = strikes.get(job['out'], 0) + 1
+                    if strikes[job['out']] >= 3:
+                        failed.add(job['out'])
+                        with open(osp.join(VIDEOS, 'render_failed.txt'), 'a') as f:
+                            f.write(job['name'] + '\n')
+                        print(f"[FAIL] {job['name']} (rc {proc.returncode}, 3 strikes)")
+                    else:
+                        print(f"[retry] {job['name']} (rc {proc.returncode}, strike {strikes[job['out']]})")
                 else:
                     print(f"[done] {job['out']}")
         launched = 0

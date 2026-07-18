@@ -55,13 +55,17 @@ def main():
     sim_params = gymapi.SimParams()
     sim_params.dt = 1.0 / 60.0
     sim_params.up_axis = gymapi.UP_AXIS_Z
-    # zero gravity keeps written states exact between rewrites
+    # zero gravity keeps written states exact between rewrites. GPU pipeline is
+    # required: under the CPU pipeline the graphics transforms never sync on
+    # this stack (robot and table render black or not at all).
     sim_params.gravity = gymapi.Vec3(0.0, 0.0, 0.0)
     sim_params.physx.solver_type = 1
-    sim_params.physx.use_gpu = False
-    sim_params.use_gpu_pipeline = False
+    sim_params.physx.use_gpu = True
+    sim_params.use_gpu_pipeline = True
     sim = gym.create_sim(0, 0, gymapi.SIM_PHYSX, sim_params)
     assert sim is not None
+    gym.set_light_parameters(sim, 0, gymapi.Vec3(1, 1, 1), gymapi.Vec3(0.6, 0.6, 0.6),
+                             gymapi.Vec3(0.2, 0.3, -1.0))
 
     asset_root = osp.abspath(osp.join(osp.dirname(osp.abspath(__file__)), '..', 'assets'))
 
@@ -69,6 +73,7 @@ def main():
     robot_opts.fix_base_link = True
     robot_opts.collapse_fixed_joints = False
     robot_opts.disable_gravity = True
+    robot_opts.use_physx_armature = True
     robot_asset = gym.load_asset(sim, asset_root, ROBOT_URDF, robot_opts)
     num_dofs = gym.get_asset_dof_count(robot_asset)
     assert num_dofs == joints.shape[1], (num_dofs, joints.shape)
@@ -128,17 +133,20 @@ def main():
     gym.prepare_sim(sim)
     root = gymtorch.wrap_tensor(gym.acquire_actor_root_state_tensor(sim))
     dof = gymtorch.wrap_tensor(gym.acquire_dof_state_tensor(sim)).view(-1, 2)
-    targets = torch.zeros(dof.shape[0], dtype=torch.float32)
+    gym.refresh_actor_root_state_tensor(sim)
+    gym.refresh_dof_state_tensor(sim)
+    device = root.device
+    targets = torch.zeros(dof.shape[0], dtype=torch.float32, device=device)
 
     os.makedirs(osp.dirname(osp.abspath(args.out)), exist_ok=True)
     writer = cv2.VideoWriter(args.out, cv2.VideoWriter_fourcc(*'mp4v'), 60, (CAM_W, CAM_H))
     for t in range(T):
-        jt = torch.tensor(joints[t], dtype=torch.float32)
+        jt = torch.tensor(joints[t], dtype=torch.float32, device=device)
         dof[:num_dofs, 0] = jt
         dof[:, 1] = 0.0
-        root[obj_root, 0:7] = torch.tensor(obj[t], dtype=torch.float32)
+        root[obj_root, 0:7] = torch.tensor(obj[t], dtype=torch.float32, device=device)
         root[obj_root, 7:13] = 0.0
-        root[goal_root, 0:7] = torch.tensor(goal[t], dtype=torch.float32)
+        root[goal_root, 0:7] = torch.tensor(goal[t], dtype=torch.float32, device=device)
         root[goal_root, 7:13] = 0.0
         gym.set_actor_root_state_tensor(sim, gymtorch.unwrap_tensor(root))
         gym.set_dof_state_tensor(sim, gymtorch.unwrap_tensor(dof))

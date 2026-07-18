@@ -183,9 +183,22 @@ def main():
     cmd = [sys.executable, '-u', 'train.py', '--task=XArm6LeapHandAP2AP', '--algo=ppo', '--seed=0',
            '--rl_device=cuda:0', '--sim_device=cuda:0', '--headless', '--test',
            f'--model_dir={args.model_dir}', f'--num_envs={N_TRAJ}', f'--cfg_env={cfg_path}']
-    log_path = osp.join(out_dir, 'train.log')
-    with open(log_path, 'w') as lf:
-        subprocess.run(cmd, cwd=repo_dir, stdout=lf, stderr=subprocess.STDOUT, check=True)
+    # IsaacGym on this host probabilistically aborts during scene creation
+    # (glibc heap-integrity trip in the asset import path, object-independent,
+    # before any rollout step). A startup abort produced no outputs, so a loud
+    # bounded retry is unbiased: completed runs are seeded and identical.
+    attempts = 5
+    for attempt in range(1, attempts + 1):
+        log_path = osp.join(out_dir, f'train.log' if attempt == 1 else f'train.attempt{attempt}.log')
+        with open(log_path, 'w') as lf:
+            proc = subprocess.run(cmd, cwd=repo_dir, stdout=lf, stderr=subprocess.STDOUT)
+        if proc.returncode == 0:
+            break
+        assert not osp.exists(osp.join(out_dir, 'native_summary.json')), \
+            f'run wrote outputs but exited {proc.returncode}, refusing to retry'
+        print(f'[020] startup abort (rc {proc.returncode}), attempt {attempt}/{attempts}, log {log_path}')
+    else:
+        raise RuntimeError(f'{args.key}: {attempts} startup aborts in a row')
 
     result = verify_and_score(args.key, args.set, out_dir, bank_path)
     print(f"[020] {args.key} ({args.set}): goals {result['per_traj_goals_reached']}, "
