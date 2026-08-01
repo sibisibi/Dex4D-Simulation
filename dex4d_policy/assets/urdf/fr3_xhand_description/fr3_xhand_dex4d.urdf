@@ -11,9 +11,9 @@
       </geometry>
     </collision>
     <inertial>
-      <origin rpy="0 0 0" xyz="-0.041018 -0.00014 0.049974" />
-      <mass value="0.629769" />
-      <inertia ixx="0.00315" ixy="8.2904e-7" ixz="0.00015" iyy="0.00388" iyz="8.2299e-6" izz="0.004285" />
+      <origin rpy="0 0 0" xyz="-0.017200 0.000400 0.074500" />
+      <mass value="2.396600" />
+      <inertia ixx="0.009000" ixy="0.000000" ixz="0.002000" iyy="0.011500" iyz="0.000000" izz="0.008500" />
     </inertial>
   </link>
 
@@ -31,9 +31,9 @@
       </geometry>
     </collision>
     <inertial>
-      <origin rpy="0 0 0" xyz="0.003875 0.002081 -0.04762" />
-      <mass value="4.970684" />
-      <inertia ixx="0.70337" ixy="-0.000139" ixz="0.006772" iyy="0.70661" iyz="0.019169" izz="0.009117" />
+      <origin rpy="0 0 0" xyz="-0.004580 0.027016 -0.061800" />
+      <mass value="2.437700" />
+      <inertia ixx="0.023240" ixy="0.000333" ixz="-0.000676" iyy="0.021460" iyz="0.003739" izz="0.005500" />
     </inertial>
   </link>
 
@@ -50,9 +50,9 @@
       </geometry>
     </collision>
     <inertial>
-      <origin rpy="0 0 0" xyz="-0.003141 -0.02872 0.003495" />
-      <mass value="0.646926" />
-      <inertia ixx="0.007962" ixy="-0.003925" ixz="0.010254" iyy="0.02811" iyz="0.000704" izz="0.025995" />
+      <origin rpy="0 0 0" xyz="0.004541 -0.180691 -0.010479" />
+      <mass value="2.237500" />
+      <inertia ixx="0.019026" ixy="0.001241" ixz="0.000499" iyy="0.005660" iyz="-0.001804" izz="0.017114" />
     </inertial>
   </link>
 
@@ -69,9 +69,9 @@
       </geometry>
     </collision>
     <inertial>
-      <origin rpy="0 0 0" xyz="0.027518 0.039252 -0.066502" />
-      <mass value="3.228604" />
-      <inertia ixx="0.037242" ixy="-0.004761" ixz="-0.011396" iyy="0.036155" iyz="-0.012805" izz="0.01083" />
+      <origin rpy="0 0 0" xyz="0.082540 0.019082 0.042027" />
+      <mass value="2.193082" />
+      <inertia ixx="0.010225" ixy="0.001144" ixz="0.003497" iyy="0.012398" iyz="0.002156" izz="0.006877" />
     </inertial>
   </link>
 
@@ -88,9 +88,9 @@
       </geometry>
     </collision>
     <inertial>
-      <origin rpy="0 0 0" xyz="-0.05317 0.104419 0.027454" />
-      <mass value="3.587895" />
-      <inertia ixx="0.025853" ixy="0.007796" ixz="-0.001332" iyy="0.019552" iyz="-0.008641" izz="0.028323" />
+      <origin rpy="0 0 0" xyz="-0.087533 0.096335 0.010120" />
+      <mass value="2.181537" />
+      <inertia ixx="0.008878" ixy="-0.003749" ixz="0.001139" iyy="0.007628" iyz="-0.000460" izz="0.010295" />
     </inertial>
   </link>
 
@@ -107,9 +107,9 @@
       </geometry>
     </collision>
     <inertial>
-      <origin rpy="0 0 0" xyz="-0.011953 0.041065 -0.038437" />
-      <mass value="1.225946" />
-      <inertia ixx="0.035549" ixy="-0.002117" ixz="-0.004037" iyy="0.029474" iyz="0.000229" izz="0.008627" />
+      <origin rpy="0 0 0" xyz="0.008383 0.010180 -0.053265" />
+      <mass value="2.186881" />
+      <inertia ixx="0.031874" ixy="0.000134" ixz="-0.000265" iyy="0.029674" iyz="-0.004734" izz="0.004751" />
     </inertial>
   </link>
 
@@ -126,9 +126,9 @@
       </geometry>
     </collision>
     <inertial>
-      <origin rpy="0 0 0" xyz="0.060149 -0.014117 -0.010517" />
-      <mass value="1.666555" />
-      <inertia ixx="0.001964" ixy="0.000109" ixz="-0.001158" iyy="0.004354" iyz="0.000341" izz="0.005433" />
+      <origin rpy="0 0 0" xyz="0.070391 -0.016074 -0.035025" />
+      <mass value="1.579681" />
+      <inertia ixx="0.002860" ixy="-0.000553" ixz="-0.000638" iyy="0.003910" iyz="-0.000240" izz="0.004530" />
     </inertial>
   </link>
 
@@ -145,13 +145,13 @@
       </geometry>
     </collision>
     <inertial>
-      <origin rpy="0 0 0" xyz="0.010517 -0.004252 0.061597" />
-      <mass value="0.735522" />
-      <inertia ixx="0.012516" ixy="-0.000428" ixz="-0.001196" iyy="0.010027" iyz="-0.000741" izz="0.004815" />
+      <origin rpy="0 0 0" xyz="-0.009108 0.018151 0.064946" />
+      <mass value="0.694841" />
+      <inertia ixx="0.000899" ixy="0.000000" ixz="-0.000013" iyy="0.001099" iyz="-0.000022" izz="0.000702" />
     </inertial>
   </link>
 
-  <link name="fr3_link8"><visual><geometry><mesh filename="fr3_xhand/meshes/bracket_plate.stl" /></geometry><material name="bracket_black_plate"><color rgba="0.1 0.1 0.1 1" /></material></visual><visual><geometry><mesh filename="fr3_xhand/meshes/bracket_base.stl" /></geometry><material name="bracket_black_base"><color rgba="0.1 0.1 0.1 1" /></material></visual></link>
+  <link name="fr3_link8"><inertial><origin rpy="0 0 0" xyz="-0.020967 -0.020946 0.016469" /><mass value="0.218000" /><inertia ixx="0.000140558" ixy="-0.000015818" ixz="0.000022616" iyy="0.000140339" iyz="0.000022663" izz="0.000161130" /></inertial><visual><geometry><mesh filename="fr3_xhand/meshes/bracket_plate.stl" /></geometry><material name="bracket_black_plate"><color rgba="0.1 0.1 0.1 1" /></material></visual><visual><geometry><mesh filename="fr3_xhand/meshes/bracket_base.stl" /></geometry><material name="bracket_black_base"><color rgba="0.1 0.1 0.1 1" /></material></visual></link>
 
   <link name="palm">
     <inertial>
@@ -818,7 +818,7 @@
     <parent link="fr3_link0" />
     <child link="fr3_link1" />
     <axis xyz="0 0 1" />
-    <limit effort="87" lower="-2.7437" upper="2.7437" velocity="2.62" />
+    <limit effort="87" lower="-2.9007400166666666" upper="2.9007400166666666" velocity="2.62" />
     <dynamics damping="0.1" friction="0.0" />
   </joint>
 
@@ -828,7 +828,7 @@
     <parent link="fr3_link1" />
     <child link="fr3_link2" />
     <axis xyz="0 0 1" />
-    <limit effort="87" lower="-1.7837" upper="1.7837" velocity="2.62" />
+    <limit effort="87" lower="-1.8360900166666667" upper="1.8360900166666667" velocity="2.62" />
     <dynamics damping="0.1" friction="0.0" />
   </joint>
 
@@ -838,7 +838,7 @@
     <parent link="fr3_link2" />
     <child link="fr3_link3" />
     <axis xyz="0 0 1" />
-    <limit effort="87" lower="-2.9007" upper="2.9007" velocity="2.62" />
+    <limit effort="87" lower="-2.9007400166666666" upper="2.9007400166666666" velocity="2.62" />
     <dynamics damping="0.1" friction="0.0" />
   </joint>
 
@@ -848,7 +848,7 @@
     <parent link="fr3_link3" />
     <child link="fr3_link4" />
     <axis xyz="0 0 1" />
-    <limit effort="87" lower="-3.0421" upper="-0.1518" velocity="2.62" />
+    <limit effort="87" lower="-3.077020016666667" upper="-0.11693708333333333" velocity="2.62" />
     <dynamics damping="0.1" friction="0.0" />
   </joint>
 
@@ -858,7 +858,7 @@
     <parent link="fr3_link4" />
     <child link="fr3_link5" />
     <axis xyz="0 0 1" />
-    <limit effort="12" lower="-2.8065" upper="2.8065" velocity="5.26" />
+    <limit effort="12" lower="-2.87630335" upper="2.87630335" velocity="5.26" />
     <dynamics damping="0.1" friction="0.0" />
   </joint>
 
@@ -868,7 +868,7 @@
     <parent link="fr3_link5" />
     <child link="fr3_link6" />
     <axis xyz="0 0 1" />
-    <limit effort="12" lower="0.5445" upper="4.5169" velocity="4.18" />
+    <limit effort="12" lower="0.43982265" upper="4.62163335" velocity="4.18" />
     <dynamics damping="0.1" friction="0.0" />
   </joint>
 
@@ -878,7 +878,7 @@
     <parent link="fr3_link6" />
     <child link="fr3_link7" />
     <axis xyz="0 0 1" />
-    <limit effort="12" lower="-3.0159" upper="3.0159" velocity="5.26" />
+    <limit effort="12" lower="-3.05083335" upper="3.05083335" velocity="5.26" />
     <dynamics damping="0.1" friction="0.0" />
   </joint>
 

@@ -29,7 +29,7 @@ env:
 
   robot_default_dof_pos: [
     # 0.0000,  0.2000,  0.0000, -2.2000,  0.0000,  2.1000, -0.7850,  # FR3 (palm over table center, facing down)
-    0.0000, -0.3740,  0.0000, -2.5060,  0.0000,  1.8480, -0.7850,  # FR3, ALLCAT (palm at stock ALLCAT point, facing down)
+    0.0000,  0.2618,  0.0000, -2.0071,  0.0000,  2.3562, -0.7854,  # FR3, SimToolReal arm_default_pos (session 032)
     0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000 # XHand (open)
   ]
 
