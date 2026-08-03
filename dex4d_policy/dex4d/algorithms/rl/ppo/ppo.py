@@ -54,7 +54,10 @@ class PPO:
                  print_log=True,
                  apply_reset=False,
                  asymmetric=False,
-                 is_vision = False
+                 is_vision = False,
+                 wandb_project="play",
+                 wandb_entity="draftrec",
+                 wandb_name=None
                  ):
         self.is_vision = is_vision
 
@@ -77,6 +80,8 @@ class PPO:
 
         # add num_keypoints to model_cfg
         model_cfg['num_keypoints'] = vec_env.task.num_keypoints
+        # keypoint offset in the obs vector is embodiment-dependent (197 = xArm6+LEAP default)
+        model_cfg['kp_start'] = getattr(vec_env.task, 'kp_start', 197)
 
         # PPO components
         self.vec_env = vec_env
@@ -104,8 +109,9 @@ class PPO:
         self.print_log = print_log
         if not is_testing:
             wandb.init(
-                project="Dex4D-PPO",
-                name=os.path.basename(self.log_dir),
+                project=wandb_project,
+                entity=wandb_entity,
+                name=wandb_name or os.path.basename(self.log_dir),
                 dir=os.path.dirname(self.log_dir),
             )
         self.tot_timesteps = 0
@@ -115,6 +121,7 @@ class PPO:
         self.current_learning_iteration = 0
 
         self.apply_reset = apply_reset
+        self.pose_viewer = None  # optionally attached by process_ppo
 
         
 
@@ -228,6 +235,8 @@ class PPO:
                     actions, actions_log_prob, values, mu, sigma = self.actor_critic.act(current_obs, current_states)
                     # Step the vec_environment
                     next_obs, rews, dones, infos = self.vec_env.step(actions, id)
+                    if self.pose_viewer is not None:
+                        self.pose_viewer.on_step()
                     next_states = self.vec_env.get_state()
                     # Record the transition
                     self.storage.add_transitions(current_obs, current_states, actions, rews, dones, values, actions_log_prob, mu, sigma)

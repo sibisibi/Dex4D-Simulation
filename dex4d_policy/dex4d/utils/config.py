@@ -62,6 +62,10 @@ def set_seed(seed, torch_deterministic=False):
 def retrieve_cfg(args, use_rlg_config=False):
     if args.task == "XArm6LeapHandAP2AP":
         return os.path.join(args.logdir, "xarm6_leap_hand_ap2ap/{}/{}".format(args.algo, args.algo)), "cfg/{}/config.yaml".format(args.algo), "cfg/xarm6_leap_hand_ap2ap.yaml"
+    elif args.task == "FR3XHandAP2AP":
+        return os.path.join(args.logdir, "fr3_xhand_ap2ap/{}/{}".format(args.algo, args.algo)), "cfg/{}/config.yaml".format(args.algo), "cfg/fr3_xhand_ap2ap.yaml"
+    elif args.task == "FR3XHandAP2APVision":
+        return os.path.join(args.logdir, "fr3_xhand_ap2ap_vision/{}/{}".format(args.algo, args.algo)), "cfg/{}/config.yaml".format(args.algo), "cfg/fr3_xhand_ap2ap_vision.yaml"
     elif args.task == "XArm6LeapHandAP2APVision":
         return os.path.join(args.logdir, "xarm6_leap_hand_ap2ap_vision/{}/{}".format(args.algo, args.algo)), "cfg/{}/config.yaml".format(args.algo), "cfg/xarm6_leap_hand_ap2ap_vision.yaml"
     else:
@@ -79,6 +83,8 @@ def load_cfg(args, use_rlg_config=False):
     # Override number of environments if passed on the command line
     if args.num_envs > 0:
         cfg["env"]["numEnvs"] = args.num_envs
+    if args.stage2_start_iteration > 0:
+        cfg["task"]["stage2_start_iteration"] = args.stage2_start_iteration
 
     if args.episode_length > 0:
         cfg["env"]["episodeLength"] = args.episode_length
@@ -275,6 +281,24 @@ def get_args(benchmark=False, use_rlg_config=False):
             "help": "Choose an ffline datatype"},
         {'name': '--ocd_tag', 'type': str, 'default': ''},
         {'name': '--backbone_type', 'type': str, 'default': ''},
+        {"name": "--wandb_project", "type": str, "default": "play",
+            "help": "wandb project name"},
+        {"name": "--wandb_entity", "type": str, "default": "draftrec",
+            "help": "wandb entity (team/user); empty uses the account default"},
+        {"name": "--wandb_name", "type": str, "default": "",
+            "help": "wandb run name; empty uses the logdir basename"},
+        {"name": "--stage2_start_iteration", "type": int, "default": 0,
+            "help": "override the stage 1 to 2 curriculum flip iteration (0 keeps the task default)"},
+        {"name": "--capture_viewer", "action": "store_true", "default": False,
+            "help": "write periodic pose-only interactive HTML viewers and log them to wandb"},
+        {"name": "--capture_viewer_len", "type": int, "default": 600},
+        {"name": "--capture_viewer_interval", "type": int, "default": 1000},
+        {"name": "--capture_viewer_env_id", "type": int, "default": 0},
+        {"name": "--capture_viewer_wandb_key", "type": str, "default": "interactive_viewer"},
+        {"name": "--capture_viewer_raw_base", "type": str, "default": "",
+            "help": "raw-GitHub base URL for robot meshes; empty picks by embodiment"},
+        {"name": "--capture_viewer_url_check", "type": str, "default": "skip",
+            "help": "HEAD-check the first robot mesh URL: skip/warn/error"},
     ]
 
     if benchmark:

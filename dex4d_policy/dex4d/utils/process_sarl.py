@@ -15,6 +15,8 @@ def process_ppo(args, env, cfg_train, logdir):
     # logdir = logdir + "_seed{}".format(env.task.cfg["seed"])
     """Set up the PPO system for training or inferencing."""
     ppo = PPO(vec_env=env,
+              wandb_project=args.wandb_project,
+              wandb_entity=args.wandb_entity,
               actor_critic_class=eval(learn_cfg.get("actor_critic_class", "ActorCritic")),
               num_transitions_per_env=learn_cfg["nsteps"],
               num_learning_epochs=learn_cfg["noptepochs"],
@@ -72,6 +74,8 @@ def process_dagger(args, env, cfg_train, logdir):
     # logdir = logdir + "_seed{}".format(env.task.cfg["seed"])
     """Set up the DAgger system for training or inferencing."""
     dagger = DAGGER(vec_env=env,
+              wandb_project=args.wandb_project,
+              wandb_entity=args.wandb_entity,
               actor_class=eval(learn_cfg.get("actor_class", "Actor")),
               actor_critic_class=eval(learn_cfg.get("actor_critic_class", "ActorCritic")),
               num_transitions_per_env=learn_cfg["nsteps"],

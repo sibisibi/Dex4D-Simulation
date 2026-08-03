@@ -91,6 +91,7 @@ class ActorPointNet(nn.Module): # student
         self.num_keypoints = model_cfg['num_keypoints']
         self.kp_downsample_ratio = model_cfg['kp_downsample_ratio']
         self.num_keypoints = self.num_keypoints // self.kp_downsample_ratio
+        self.num_robot_dofs = model_cfg.get('num_robot_dofs', 22)
         self.kp_feature_dim = 128
         self.num_obs = obs_shape[0] # partial
         self.num_obs = self.num_obs - self.num_keypoints * 6 + self.kp_feature_dim # remove kp, add kp feature
@@ -129,7 +130,7 @@ class ActorPointNet(nn.Module): # student
         raise NotImplementedError
     
     def compute_obs_with_pn(self, observations):
-        kp_start = 66
+        kp_start = 3 * self.num_robot_dofs  # qpos + qvel + last action
         object_kp = observations[:, kp_start:kp_start+self.num_keypoints*3].reshape(-1, self.num_keypoints, 3) # [B, self.num_keypoints, 3]
         goal_kp = observations[:, kp_start+self.num_keypoints*3:kp_start+self.num_keypoints*6].reshape(-1, self.num_keypoints, 3) # [B, self.num_keypoints, 3]
         concatenated_kp = torch.cat([object_kp, goal_kp], dim=-1)  # [B, N, 6]
@@ -159,6 +160,7 @@ class ActorPointNetTransformer(nn.Module): # student
         self.num_keypoints = model_cfg['num_keypoints']
         self.kp_downsample_ratio = model_cfg['kp_downsample_ratio']
         self.num_keypoints = self.num_keypoints // self.kp_downsample_ratio
+        self.num_robot_dofs = model_cfg.get('num_robot_dofs', 22)
         self.token_dim = 128
         self.num_obs = obs_shape[0] # partial
         self.predict_future_states = model_cfg.get('predict_future_states', False)
@@ -182,9 +184,9 @@ class ActorPointNetTransformer(nn.Module): # student
         
     def build_tokenizers(self):
         self.obs_dim_dict = {
-            'robot_qpos': 22,
-            'robot_qvel': 22,
-            'action': 22,
+            'robot_qpos': self.num_robot_dofs,
+            'robot_qvel': self.num_robot_dofs,
+            'action': self.num_robot_dofs,
             'object_and_goal_kp': self.num_keypoints * 6,
         }
         self.token_keys = list(self.obs_dim_dict.keys())
