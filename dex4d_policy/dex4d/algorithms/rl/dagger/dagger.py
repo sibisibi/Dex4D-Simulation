@@ -77,6 +77,7 @@ class DAGGER:
         model_cfg['kp_downsample_ratio'] = vec_env.task.kp_downsample_ratio
         # student obs prefix (qpos+qvel+action) is embodiment-dependent (22 stock, 19 FR3)
         model_cfg['num_robot_dofs'] = getattr(vec_env.task, 'num_robot_dofs', 22)
+        model_cfg["kp_start"] = getattr(vec_env.task, "kp_start", 197)
         self.future_loss_weights = model_cfg.get("future_loss_weights", None)
         self.teacher_forcing_iterations = model_cfg.get("teacher_forcing_iterations", -1)
 
@@ -110,10 +111,12 @@ class DAGGER:
         self.print_log = print_log
         if not is_testing:
             wandb.init(
-                project="Dex4D-DAGGER",
+                project="play",
+                entity="draftrec",
                 name=os.path.basename(self.log_dir),
                 dir=os.path.dirname(self.log_dir),
             )
+        self.pose_viewer = None  # optionally attached by process_sarl
         self.tot_timesteps = 0
         self.tot_time = 0
         self.is_testing = is_testing
@@ -272,6 +275,8 @@ class DAGGER:
                         step_actions = actions
                     # Step the vec_environment
                     next_obs, rews, dones, infos = self.vec_env.step(step_actions, id)
+                    if self.pose_viewer is not None:
+                        self.pose_viewer.on_step()
                     next_states = self.vec_env.get_state()
                     # Record the transition (use next_obs as the "future" target)
                     self.storage.add_transitions(current_obs, actions_expert, rews, dones, future_observations=next_obs)

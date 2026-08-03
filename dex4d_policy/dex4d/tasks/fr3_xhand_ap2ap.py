@@ -25,6 +25,8 @@ from utils.util import visualize_point_isaacgym, visualize_axes_isaacgym
 from copy import deepcopy
 import yaml
 
+from utils.robot_gains import (ARM_ARMATURE, ARM_FRICTION, ARM_GAIN_ROWS,
+                               HAND_ARMATURE, HAND_DAMPING, HAND_STIFFNESS)
 from utils.util import sample_position, sample_rotation, compute_keypoints, extract_mesh_keypoints, keypoint_local_to_world, mask_keypoints_oneside, mask_keypoints_test_time, mask_object_goal_keypoints_test_time, compute_fingertip_to_object_vecs, mask_object_goal_keypoints_random_height_test_time
 
 
@@ -393,11 +395,14 @@ class FR3XHandAP2AP(BaseTask):
         asset_options.thickness = 0.001
         asset_options.angular_damping = 0.01
         asset_options.linear_damping = 0.01
-        # PD gains from simtoolreal's fr3-xhand-adapter profile
-        fr3_dof_stiffness = to_torch([400 for _ in range(7)], dtype=torch.float, device=self.device)
-        fr3_dof_damping = to_torch([80 for _ in range(7)], dtype=torch.float, device=self.device)
-        xhand_dof_stiffness = to_torch([3.0 for _ in range(12)], dtype=torch.float, device=self.device)
-        xhand_dof_damping = to_torch([0.1 for _ in range(12)], dtype=torch.float, device=self.device)
+        # PD gains from simtoolreal's arm gain rows, selected by config key.
+        self.arm_gain_row = self.cfg["env"].get("arm_gain_row", "a3")
+        fr3_kp, fr3_kd = ARM_GAIN_ROWS[self.arm_gain_row]
+        print(f"arm gain row {self.arm_gain_row}: kp {fr3_kp} kd {fr3_kd}")
+        fr3_dof_stiffness = to_torch(list(fr3_kp), dtype=torch.float, device=self.device)
+        fr3_dof_damping = to_torch(list(fr3_kd), dtype=torch.float, device=self.device)
+        xhand_dof_stiffness = to_torch(list(HAND_STIFFNESS), dtype=torch.float, device=self.device)
+        xhand_dof_damping = to_torch(list(HAND_DAMPING), dtype=torch.float, device=self.device)
         fr3_xhand_dof_stiffness = torch.cat((fr3_dof_stiffness, xhand_dof_stiffness), 0)
         fr3_xhand_dof_damping = torch.cat((fr3_dof_damping, xhand_dof_damping), 0)
 
@@ -443,8 +448,11 @@ class FR3XHandAP2AP(BaseTask):
                     robot_dof_props['stiffness'][i] = fr3_xhand_dof_stiffness[i]
                     robot_dof_props['damping'][i] = fr3_xhand_dof_damping[i]
                     if i >= self.num_arm_dofs:
-                        # simtoolreal hand joint armature
-                        robot_dof_props['armature'][i] = 0.001
+                        robot_dof_props['armature'][i] = HAND_ARMATURE[i - self.num_arm_dofs]
+                    else:
+                        # motor inertia times gear ratio squared, fr3v2/dynamics.yaml
+                        robot_dof_props['armature'][i] = ARM_ARMATURE[i]
+                        robot_dof_props['friction'][i] = ARM_FRICTION[i]
                 else:
                     raise Exception("Currently only PhysX is supported.")
 
@@ -559,7 +567,7 @@ class FR3XHandAP2AP(BaseTask):
         table_asset = self.gym.create_box(self.sim, self.table_dims.x, self.table_dims.y, self.table_dims.z, asset_options)
 
         robot_start_pose = gymapi.Transform()
-        robot_start_pose.p = gymapi.Vec3(-0.5, 0.0, self.table_dims.z)  # XArm6 base sits on the table
+        robot_start_pose.p = gymapi.Vec3(-0.48, 0.0, self.table_dims.z)  # base sits on the table, 0.48 from its centre
         robot_start_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)  # Upright orientation
 
         object_start_pose = gymapi.Transform()

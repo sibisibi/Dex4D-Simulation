@@ -83,6 +83,8 @@ def load_cfg(args, use_rlg_config=False):
         cfg["env"]["numEnvs"] = args.num_envs
     if args.stage2_start_iteration > 0:
         cfg["task"]["stage2_start_iteration"] = args.stage2_start_iteration
+    if args.arm_gain_row:
+        cfg["env"]["arm_gain_row"] = args.arm_gain_row
 
     if args.episode_length > 0:
         cfg["env"]["episodeLength"] = args.episode_length
@@ -253,6 +255,8 @@ def get_args(benchmark=False, use_rlg_config=False):
             "help": "Requires --experiment flag, adds physics engine, sim device, pipeline info and if domain randomization is used to the experiment name provided by user"},
         {"name": "--cfg_train", "type": str,
             "default": "Base"},
+        {"name": "--arm_gain_row", "type": str, "default": "",
+            "help": "FR3 arm gain row, a1 a2 a3 a4. Empty keeps the cfg value."},
         {"name": "--cfg_env", "type": str, "default": "Base"},
         {"name": "--num_envs", "type": int, "default": 0,
             "help": "Number of environments to create - override config file"},
@@ -290,7 +294,7 @@ def get_args(benchmark=False, use_rlg_config=False):
         {"name": "--capture_viewer", "action": "store_true", "default": False,
             "help": "write periodic pose-only interactive HTML viewers and log them to wandb"},
         {"name": "--capture_viewer_len", "type": int, "default": 600},
-        {"name": "--capture_viewer_interval", "type": int, "default": 6000},
+        {"name": "--capture_viewer_interval", "type": int, "default": 1000},
         {"name": "--capture_viewer_env_id", "type": int, "default": 0},
         {"name": "--capture_viewer_wandb_key", "type": str, "default": "interactive_viewer"},
         {"name": "--capture_viewer_raw_base", "type": str, "default": "",

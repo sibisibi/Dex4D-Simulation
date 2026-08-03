@@ -127,8 +127,9 @@ def copy_files(args, logdir):
         copy_if_exists("algorithms/rl/ppo/ppo.py")
         copy_if_exists("algorithms/rl/ppo/module.py")
         copy_if_exists("tasks/fr3_xhand_ap2ap.py")
-        copy_if_exists("cfg/fr3_xhand_ap2ap.yaml")
-        copy_if_exists("cfg/ppo/config.yaml")
+        # snapshot the cfg files this run actually read (direct-path launch)
+        copy_if_exists(args.cfg_env)
+        copy_if_exists(args.cfg_train)
     elif args.task == "XArm6LeapHandAP2APVision":
         copy_if_exists("algorithms/rl/dagger/dagger.py")
         copy_if_exists("algorithms/rl/dagger/module.py")
