@@ -25,12 +25,12 @@ from copy import deepcopy
 
 from utils.util import sample_position, sample_rotation, compute_keypoints, extract_mesh_keypoints, keypoint_local_to_world, mask_keypoints_oneside
 
-from tasks.xarm6_leap_hand_ap2ap import XArm6LeapHandAP2AP, orientation_error, control_osc, control_ik
+from tasks.fr3_xhand_ap2ap import FR3XHandAP2AP, orientation_error, control_osc, control_ik
 
 
-class XArm6LeapHandAP2APVision(XArm6LeapHandAP2AP):
+class FR3XHandAP2APVision(FR3XHandAP2AP):
     def __init__(self, cfg, sim_params, physics_engine, device_type, device_id, headless,
-                 agent_index=[[[0, 1, 2, 3, 4, 5]], [[0, 1, 2, 3, 4, 5]]], is_multi_agent=False,
+                 agent_index=[[[0, 1, 2, 3, 4, 5, 6]], [[0, 1, 2, 3, 4, 5, 6]]], is_multi_agent=False,
                  enable_camera_sensors=False):
 
         super().__init__(cfg, sim_params, physics_engine, device_type, device_id, headless, agent_index, is_multi_agent, enable_camera_sensors)

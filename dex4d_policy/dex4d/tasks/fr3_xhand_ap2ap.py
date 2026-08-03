@@ -25,12 +25,14 @@ from utils.util import visualize_point_isaacgym, visualize_axes_isaacgym
 from copy import deepcopy
 import yaml
 
+from utils.robot_gains import (ARM_ARMATURE, ARM_FRICTION, ARM_DAMPING, ARM_STIFFNESS,
+                               HAND_ARMATURE, HAND_DAMPING, HAND_STIFFNESS)
 from utils.util import sample_position, sample_rotation, compute_keypoints, extract_mesh_keypoints, keypoint_local_to_world, mask_keypoints_oneside, mask_keypoints_test_time, mask_object_goal_keypoints_test_time, compute_fingertip_to_object_vecs, mask_object_goal_keypoints_random_height_test_time
 
 
-class XArm6LeapHandAP2AP(BaseTask):
+class FR3XHandAP2AP(BaseTask):
     def __init__(self, cfg, sim_params, physics_engine, device_type, device_id, headless,
-                 agent_index=[[[0, 1, 2, 3, 4, 5]], [[0, 1, 2, 3, 4, 5]]], is_multi_agent=False,
+                 agent_index=[[[0, 1, 2, 3, 4, 5, 6]], [[0, 1, 2, 3, 4, 5, 6]]], is_multi_agent=False,
                  enable_camera_sensors=False):
 
         self.cfg = cfg
@@ -40,6 +42,8 @@ class XArm6LeapHandAP2AP(BaseTask):
         self.is_multi_agent = is_multi_agent
         self.randomize = False if self.cfg['test'] else self.cfg["task"].get("randomize", False)
         self.curriculum = self.cfg["task"].get("curriculum", False)
+        # stage 1 -> 2 flip iteration, CLI-overridable for the elongated-curriculum runs
+        self.stage2_start_iteration = self.cfg["task"].get("stage2_start_iteration", 15000)
         self.randomization_params = self.cfg["task"]["randomization_params"]
         self.aggregate_mode = self.cfg["env"]["aggregateMode"]
         self.dist_reward_scale = self.cfg["env"]["distRewardScale"]
@@ -88,14 +92,17 @@ class XArm6LeapHandAP2AP(BaseTask):
         self.kp_downsample_ratio = self.cfg["env"]["kpDownsampleRatio"]
         self.num_masked_kp_flatten = 6 * (self.num_keypoints // self.kp_downsample_ratio)
         self.asymmetric_obs = self.cfg["env"]["asymmetric_observations"]
-        num_states = 273 + self.num_kp_flatten # always full state, for Critic or Dagger expert
-        num_obs = 66 + self.num_masked_kp_flatten if self.asymmetric_obs else num_states # partial state, for Actor (when asymmetric) or Dagger student
+        # 283 = 3*19 dof + 13*5 fingertip states + 6*5 fingertip F/T + 13 hand + 19 actions + 20 obj/goal + 64 visual feat + 3*5 fingertip-obj vecs
+        num_states = 283 + self.num_kp_flatten # always full state, for Critic or Dagger expert
+        num_obs = 57 + self.num_masked_kp_flatten if self.asymmetric_obs else num_states # partial state, for Actor (when asymmetric) or Dagger student
         self.num_obs_dict = {
             "full_state": num_obs,
         }
 
         self.up_axis = 'z'
-        self.fingertips = ["fingertip", "fingertip_2", "fingertip_3", "thumb_fingertip"]  # 4 fingers
+        # Collision-bearing distal links, the *_tip shells are near-massless and importers merge them.
+        # https://github.com/DAVIAN-Robotics/simtoolreal/blob/main/isaacsimenvs/tasks/simtoolreal/robots.py
+        self.fingertips = ["index_rota_link2", "mid_link2", "ring_link2", "thumb_rota_link2", "pinky_link2"]  # 5 fingers
         self.hand_center = ["palm_center"]
         self.num_fingertips = len(self.fingertips) 
         self.use_vel_obs = False
@@ -103,7 +110,10 @@ class XArm6LeapHandAP2AP(BaseTask):
         self.cfg["env"]["numObservations"] = self.num_obs_dict[self.obs_type]
         self.cfg["env"]["numStates"] = num_states
         self.num_agents = 1
-        self.cfg["env"]["numActions"] = 22  # XArm6 (6 DOF) + Leap Hand (16 DOF) - may need adjustment based on actual DOF count 
+        self.cfg["env"]["numActions"] = 19  # FR3 (7 DOF) + XHand (12 DOF)
+        # keypoint offset in the full-state obs vector, consumed by ActorCriticPointNet
+        # (3*19 dof + 13*5 ft states + 6*5 ft F/T + 13 hand + 19 actions + 20 obj/goal = 204)
+        self.kp_start = 204
         self.cfg["device_type"] = device_type
         self.cfg["device_id"] = device_id
         self.cfg["headless"] = headless
@@ -146,13 +156,12 @@ class XArm6LeapHandAP2AP(BaseTask):
 
         self.z_theta = torch.zeros(self.num_envs, device=self.device)
 
-        # create some wrapper tensors for different slices, arm_default_dof_pos could be [0, 0.38, -1.37, 0, 0.99, 0] or [0, -0.52, -0.70, 0, 1.22, 0]
+        # create some wrapper tensors for different slices; arm default pose hovers the palm over the table center
         if self.cfg["env"].get("robot_default_dof_pos", None) is not None:
             self.robot_default_dof_pos = to_torch(self.cfg["env"]["robot_default_dof_pos"], dtype=torch.float, device=self.device)
         else:
             self.robot_default_dof_pos = torch.zeros(self.num_robot_dofs, dtype=torch.float, device=self.device)
-            self.robot_default_dof_pos[1], self.robot_default_dof_pos[2], self.robot_default_dof_pos[4] = 0.38, -1.37, 0.99
-            # self.robot_default_dof_pos[1], self.robot_default_dof_pos[2], self.robot_default_dof_pos[4] = -0.52, -0.70, 1.22 # a safer but harder initial pose
+            self.robot_default_dof_pos[:7] = to_torch([0.0, 0.2, 0.0, -2.2, 0.0, 2.1, -0.785], dtype=torch.float, device=self.device)
         self.robot_default_dof_vel = torch.zeros(self.num_robot_dofs, dtype=torch.float, device=self.device)
         self.dof_state = gymtorch.wrap_tensor(dof_state_tensor)
         self.robot_dof_state = self.dof_state.view(self.num_envs, -1, 2)[:, :self.num_robot_dofs]
@@ -218,16 +227,8 @@ class XArm6LeapHandAP2AP(BaseTask):
         self.too_far_reset_threshold = self.cfg['env'].get('too_far_reset_threshold', 0.3)
         self.success_threshold = 0.05
 
-        # Nominal finger curled config (from DEXTRAH)
-        # HOWEVER, the joint order here is different from DEXTRAH! SO WE NEED TO MAP IT CAREFULLY.
-        # (Pdb) self.gym.get_asset_dof_names(robot_asset)
-        # ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6', '1', '0', '2', '3', '12', '13', '14', '15', '5', '4', '6', '7', '9', '8', '10', '11']
-        self.curled_q = \
-            torch.tensor([0.0,  0.,  0.,  0., # NOTE: used to be 0.3 for last 3 joints
-                        #   1.5,  0.60147215,  0.33795027,  0.60845138,
-                          0.0,  0.,  0.,  0.,
-                          0.0,  0.,  0.,  0.,
-                          0.0,  0.,  0.,  0.], device=self.device)
+        # Curl-regularizer target, open hand. XHand has 12 hand dofs.
+        self.curled_q = torch.zeros(12, device=self.device)
         self.curled_q = self.curled_q.repeat(self.num_envs, 1).contiguous()
 
         self.object_init_stable_ratio = self.cfg['env'].get('object_init_stable_ratio', 0.2)
@@ -322,7 +323,7 @@ class XArm6LeapHandAP2AP(BaseTask):
         self.goal_cond = self.cfg["env"]["goal_cond"]
         self.random_prior = self.cfg['env']['random_prior']
         self.random_time = self.cfg["env"]["random_time"]
-        self.target_qpos = torch.zeros((self.num_envs, 22), device=self.device)
+        self.target_qpos = torch.zeros((self.num_envs, 19), device=self.device)
         self.target_hand_pos = torch.zeros((self.num_envs, 3), device=self.device)
         self.target_hand_rot = torch.zeros((self.num_envs, 4), device=self.device)
         self.object_init_euler_xy = torch.zeros((self.num_envs, 2), device=self.device)
@@ -332,6 +333,8 @@ class XArm6LeapHandAP2AP(BaseTask):
         assets_path = '../assets'
         dataset_root_path = osp.join(assets_path, 'datasetv4.1')
 
+        # datasetv4.1 grasp priors encode xArm6+LEAP (22-dim) qpos and do not apply to FR3+XHand
+        assert not self.goal_cond, "goal_cond grasp priors (datasetv4.1) are xArm6+LEAP-specific"
         if self.goal_cond:
             for object_code in self.object_code_list:
                 data_per_object = {}
@@ -375,7 +378,7 @@ class XArm6LeapHandAP2AP(BaseTask):
         upper = gymapi.Vec3(spacing, spacing, spacing)
 
         asset_root = "../../assets"
-        robot_asset_file = "urdf/xarm6_leap_description/xarm6_leap_left_2023.urdf"
+        robot_asset_file = "urdf/fr3_xhand_description/fr3_xhand/fr3_xhand.urdf"
         table_texture_files = "../assets/textures/texture_stone_stone_texture_0.jpg"
         table_texture_handle = self.gym.create_texture_from_file(self.sim, table_texture_files)
 
@@ -383,22 +386,21 @@ class XArm6LeapHandAP2AP(BaseTask):
             asset_root = self.cfg["env"]["asset"].get("assetRoot", asset_root)
             robot_asset_file = self.cfg["env"]["asset"].get("assetFileName", robot_asset_file)
 
-        # load xarm6 + leap hand asset
-        # TODO: need to change stiffness, damping
+        # load fr3 + xhand asset
         asset_options = gymapi.AssetOptions()
         asset_options.flip_visual_attachments = False
-        asset_options.fix_base_link = True  # XArm6 has a fixed base, not flying
+        asset_options.fix_base_link = True  # FR3 has a fixed base, not flying
         asset_options.collapse_fixed_joints = False
         asset_options.disable_gravity = True
         asset_options.thickness = 0.001
         asset_options.angular_damping = 0.01
         asset_options.linear_damping = 0.01
-        xarm6_dof_stiffness = to_torch([100, 100, 64, 64, 64, 40], dtype=torch.float, device=self.device)
-        xarm6_dof_damping = to_torch([1 for _ in range(6)], dtype=torch.float, device=self.device)
-        leap_hand_dof_stiffness = to_torch([3 for _ in range(16)], dtype=torch.float, device=self.device)
-        leap_hand_dof_damping = to_torch([0.5 for _ in range(16)], dtype=torch.float, device=self.device)
-        xarm6_leap_dof_stiffness = torch.cat((xarm6_dof_stiffness, leap_hand_dof_stiffness), 0)
-        xarm6_leap_dof_damping = torch.cat((xarm6_dof_damping, leap_hand_dof_damping), 0)
+        fr3_dof_stiffness = to_torch(list(ARM_STIFFNESS), dtype=torch.float, device=self.device)
+        fr3_dof_damping = to_torch(list(ARM_DAMPING), dtype=torch.float, device=self.device)
+        xhand_dof_stiffness = to_torch(list(HAND_STIFFNESS), dtype=torch.float, device=self.device)
+        xhand_dof_damping = to_torch(list(HAND_DAMPING), dtype=torch.float, device=self.device)
+        fr3_xhand_dof_stiffness = torch.cat((fr3_dof_stiffness, xhand_dof_stiffness), 0)
+        fr3_xhand_dof_damping = torch.cat((fr3_dof_damping, xhand_dof_damping), 0)
 
         if self.physics_engine == gymapi.SIM_PHYSX:
             asset_options.use_physx_armature = True
@@ -408,8 +410,8 @@ class XArm6LeapHandAP2AP(BaseTask):
         self.num_robot_bodies = self.gym.get_asset_rigid_body_count(robot_asset)
         self.num_robot_shapes = self.gym.get_asset_rigid_shape_count(robot_asset)
         self.num_robot_dofs = self.gym.get_asset_dof_count(robot_asset)
-        self.num_arm_dofs = 6  # xarm6 has 6 dofs
-        self.num_hand_dofs = self.num_robot_dofs - self.num_arm_dofs # leap hand has 16 dofs
+        self.num_arm_dofs = 7  # fr3 has 7 dofs
+        self.num_hand_dofs = self.num_robot_dofs - self.num_arm_dofs # xhand has 12 dofs
 
         print("self.num_robot_bodies: ", self.num_robot_bodies)
         print("self.num_robot_shapes: ", self.num_robot_shapes)
@@ -439,8 +441,14 @@ class XArm6LeapHandAP2AP(BaseTask):
             else:
                 robot_dof_props['driveMode'][i] = gymapi.DOF_MODE_POS
                 if self.physics_engine == gymapi.SIM_PHYSX:
-                    robot_dof_props['stiffness'][i] = xarm6_leap_dof_stiffness[i]
-                    robot_dof_props['damping'][i] = xarm6_leap_dof_damping[i]
+                    robot_dof_props['stiffness'][i] = fr3_xhand_dof_stiffness[i]
+                    robot_dof_props['damping'][i] = fr3_xhand_dof_damping[i]
+                    if i >= self.num_arm_dofs:
+                        robot_dof_props['armature'][i] = HAND_ARMATURE[i - self.num_arm_dofs]
+                    else:
+                        # motor inertia times gear ratio squared, fr3v2/dynamics.yaml
+                        robot_dof_props['armature'][i] = ARM_ARMATURE[i]
+                        robot_dof_props['friction'][i] = ARM_FRICTION[i]
                 else:
                     raise Exception("Currently only PhysX is supported.")
 
@@ -555,7 +563,7 @@ class XArm6LeapHandAP2AP(BaseTask):
         table_asset = self.gym.create_box(self.sim, self.table_dims.x, self.table_dims.y, self.table_dims.z, asset_options)
 
         robot_start_pose = gymapi.Transform()
-        robot_start_pose.p = gymapi.Vec3(-0.5, 0.0, self.table_dims.z)  # XArm6 base sits on the table
+        robot_start_pose.p = gymapi.Vec3(-0.48, 0.0, self.table_dims.z)  # base sits on the table, 0.48 from its centre
         robot_start_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)  # Upright orientation
 
         object_start_pose = gymapi.Transform()
@@ -593,14 +601,16 @@ class XArm6LeapHandAP2AP(BaseTask):
 
         self.fingertip_handles = [self.gym.find_asset_rigid_body_index(robot_asset, name) for name in self.fingertips]
         
+        # fingertip-point links (fixed children of the *_link2 bodies, already at the tip)
         body_names = {
-            'wrist': 'link6',
-            'palm_lower': 'palm_lower',
+            'wrist': 'fr3_link7',
+            'palm_lower': 'palm',
             'palm_center': 'palm_center',
-            'thumb': 'thumb_fingertip',
-            'index': 'fingertip',
-            'middle': 'fingertip_2',
-            'ring': 'fingertip_3',
+            'thumb': 'thumb_rota_tip',
+            'index': 'index_rota_tip',
+            'middle': 'mid_tip',
+            'ring': 'ring_tip',
+            'pinky': 'pinky_tip',
         }
         self.hand_body_idx_dict = {}
         for name, body_name in body_names.items():
@@ -614,7 +624,7 @@ class XArm6LeapHandAP2AP(BaseTask):
         for i in range(len(self.termination_contact_names)):
             self.termination_contact_indices[i] = self.gym.find_asset_rigid_body_index(robot_asset, self.termination_contact_names[i])
 
-        # create force sensors: fingertips (6x4=24)
+        # create force sensors: fingertips (6x5=30)
         if "full_state" in self.obs_type or self.asymmetric_obs:
             sensor_pose = gymapi.Transform()
             for ft_handle in self.fingertip_handles:
@@ -791,42 +801,32 @@ class XArm6LeapHandAP2AP(BaseTask):
 
         idx = self.hand_body_idx_dict['palm_center']
         self.right_hand_state = self.rigid_body_states[:, idx, 0:13]
+        # palm_center and the *_tip links are dedicated frames already at the palm center /
+        # fingertip points (URDF fixed links), so no quat_apply offsets are needed here.
         self.right_hand_pos = self.rigid_body_states[:, idx, 0:3]
         self.right_hand_rot = self.rigid_body_states[:, idx, 3:7]
         self.right_hand_vel = self.rigid_body_states[:, idx, 7:]
-        # Here the quat_apply is for adjusting the positions of palm_center and fingertips
-        self.right_hand_pos = self.right_hand_pos + quat_apply(self.right_hand_rot,to_torch([0, 0, 1], device=self.device).repeat(self.num_envs, 1) * -0.01) # down
-        self.right_hand_pos = self.right_hand_pos + quat_apply(self.right_hand_rot,to_torch([1, 0, 0], device=self.device).repeat(self.num_envs, 1) * 0.04)  # forward
 
         # right hand fingers
         idx = self.hand_body_idx_dict['index']
         self.right_hand_ff_pos = self.rigid_body_states[:, idx, 0:3]
         self.right_hand_ff_rot = self.rigid_body_states[:, idx, 3:7]
-        self.right_hand_ff_pos = self.right_hand_ff_pos + quat_apply(self.right_hand_ff_rot,to_torch([0, 1, 0], device=self.device).repeat(self.num_envs, 1) * -0.035) # forward
-        self.right_hand_ff_pos = self.right_hand_ff_pos + quat_apply(self.right_hand_ff_rot,to_torch([0, 0, 1], device=self.device).repeat(self.num_envs, 1) * 0.015) # side
-        self.right_hand_ff_pos = self.right_hand_ff_pos + quat_apply(self.right_hand_ff_rot,to_torch([1, 0, 0], device=self.device).repeat(self.num_envs, 1) * -0.01) # down
-                                                              
+
         idx = self.hand_body_idx_dict['middle']
         self.right_hand_mf_pos = self.rigid_body_states[:, idx, 0:3]
         self.right_hand_mf_rot = self.rigid_body_states[:, idx, 3:7]
-        self.right_hand_mf_pos = self.right_hand_mf_pos + quat_apply(self.right_hand_mf_rot,to_torch([0, 1, 0], device=self.device).repeat(self.num_envs, 1) * -0.035) # forward
-        self.right_hand_mf_pos = self.right_hand_mf_pos + quat_apply(self.right_hand_mf_rot,to_torch([0, 0, 1], device=self.device).repeat(self.num_envs, 1) * 0.015) # side
-        self.right_hand_mf_pos = self.right_hand_mf_pos + quat_apply(self.right_hand_mf_rot,to_torch([1, 0, 0], device=self.device).repeat(self.num_envs, 1) * -0.01) # down
 
         idx = self.hand_body_idx_dict['ring']
         self.right_hand_rf_pos = self.rigid_body_states[:, idx, 0:3]
         self.right_hand_rf_rot = self.rigid_body_states[:, idx, 3:7]
-        self.right_hand_rf_pos = self.right_hand_rf_pos + quat_apply(self.right_hand_rf_rot,to_torch([0, 1, 0], device=self.device).repeat(self.num_envs, 1) * -0.035) # forward
-        self.right_hand_rf_pos = self.right_hand_rf_pos + quat_apply(self.right_hand_rf_rot,to_torch([0, 0, 1], device=self.device).repeat(self.num_envs, 1) * 0.015) # side
-        self.right_hand_rf_pos = self.right_hand_rf_pos + quat_apply(self.right_hand_rf_rot,to_torch([1, 0, 0], device=self.device).repeat(self.num_envs, 1) * -0.01) # down
-                                                                         
+
+        idx = self.hand_body_idx_dict['pinky']
+        self.right_hand_lf_pos = self.rigid_body_states[:, idx, 0:3]
+        self.right_hand_lf_rot = self.rigid_body_states[:, idx, 3:7]
+
         idx = self.hand_body_idx_dict['thumb']
         self.right_hand_th_pos = self.rigid_body_states[:, idx, 0:3]
         self.right_hand_th_rot = self.rigid_body_states[:, idx, 3:7]
-        self.right_hand_th_pos = self.right_hand_th_pos + quat_apply(self.right_hand_th_rot,to_torch([0, 1, 0], device=self.device).repeat(self.num_envs, 1) * -0.05) # forward
-        self.right_hand_th_pos = self.right_hand_th_pos + quat_apply(self.right_hand_th_rot,to_torch([0, 0, 1], device=self.device).repeat(self.num_envs, 1) * -0.015) # side
-        self.right_hand_th_pos = self.right_hand_th_pos + quat_apply(self.right_hand_th_rot,to_torch([1, 0, 0], device=self.device).repeat(self.num_envs, 1) * -0.01) # down
-        # import pdb; pdb.set_trace()
 
         self.goal_pose = self.goal_state[:, 0:7]
         self.goal_pos = self.goal_state[:, 0:3]
@@ -924,8 +924,8 @@ class XArm6LeapHandAP2AP(BaseTask):
         obs_ptr = 0
 
         # unscale to (-1，1)
-        num_ft_states = 13 * int(self.num_fingertips)  # 52 ##
-        num_ft_force_torques = 6 * int(self.num_fingertips)  # 24 ##
+        num_ft_states = 13 * int(self.num_fingertips)  # 65 ##
+        num_ft_force_torques = 6 * int(self.num_fingertips)  # 30 ##
 
 
         ##### 66-dim: robot state, including dof_pos, dof_vel, dof_force (torque) #####
@@ -933,7 +933,7 @@ class XArm6LeapHandAP2AP(BaseTask):
                                                                self.robot_dof_lower_limits,
                                                                self.robot_dof_upper_limits) # 22 ##
         self.states_buf[:,self.num_robot_dofs:2 * self.num_robot_dofs] = self.vel_obs_scale * self.robot_dof_vel # 22 ##
-        self.states_buf[:,2 * self.num_robot_dofs:3 * self.num_robot_dofs] = self.force_torque_obs_scale * self.dof_force_tensor[:, :22] # 22 ##
+        self.states_buf[:,2 * self.num_robot_dofs:3 * self.num_robot_dofs] = self.force_torque_obs_scale * self.dof_force_tensor[:, :self.num_robot_dofs] # 19 ##
         states_ptr += 3 * self.num_robot_dofs
 
         # For student, we only use dof_pos and dof_vel as observation
@@ -950,7 +950,7 @@ class XArm6LeapHandAP2AP(BaseTask):
         #     aux[:, i * 13:(i + 1) * 13] = self.unpose_state(aux[:, i * 13:(i + 1) * 13])
         fingertip_states_start = states_ptr
         self.states_buf[:, fingertip_states_start:fingertip_states_start + num_ft_states] = aux
-        self.states_buf[:, fingertip_states_start + num_ft_states:fingertip_states_start + num_ft_states + num_ft_force_torques] = self.force_torque_obs_scale * self.force_sensor_tensor[:, :24]
+        self.states_buf[:, fingertip_states_start + num_ft_states:fingertip_states_start + num_ft_states + num_ft_force_torques] = self.force_torque_obs_scale * self.force_sensor_tensor[:, :num_ft_force_torques]
         states_ptr += num_ft_states + num_ft_force_torques
 
         if not self.asymmetric_obs:
@@ -1056,8 +1056,9 @@ class XArm6LeapHandAP2AP(BaseTask):
         self.fingertip_pos = torch.cat([self.right_hand_ff_pos.unsqueeze(1),
                                    self.right_hand_mf_pos.unsqueeze(1),
                                    self.right_hand_rf_pos.unsqueeze(1),
-                                   self.right_hand_th_pos.unsqueeze(1)], dim=1)  # [num_envs, 4, 3]
-        self.fingertip_to_object_vecs = compute_fingertip_to_object_vecs(self.fingertip_pos, self.object_keypoints)  # [num_envs, num_fingertips, 3], in our case [num_envs, 4, 3]
+                                   self.right_hand_th_pos.unsqueeze(1),
+                                   self.right_hand_lf_pos.unsqueeze(1)], dim=1)  # [num_envs, 5, 3]
+        self.fingertip_to_object_vecs = compute_fingertip_to_object_vecs(self.fingertip_pos, self.object_keypoints)  # [num_envs, num_fingertips, 3], in our case [num_envs, 5, 3]
         self.states_buf[:, fingertip_object_vec_start:fingertip_object_vec_start + self.num_fingertips * 3] = self.fingertip_to_object_vecs.reshape(self.num_envs, -1)
         states_ptr += self.num_fingertips * 3
         
@@ -1394,13 +1395,14 @@ class XArm6LeapHandAP2AP(BaseTask):
         self.obj_hand_dist = torch.norm(self.object_pos - self.right_hand_pos, p=2, dim=-1)
         self.obj_hand_dist = torch.where(self.obj_hand_dist >= 0.5, 0.5 + 0 * self.obj_hand_dist, self.obj_hand_dist)
 
-        # Distance from the fingers to the object
+        # Distance from the fingers to the object (5 fingers; caps/thresholds keep the stock per-finger values)
         self.obj_finger_dist = torch.norm(self.object_pos - self.right_hand_ff_pos, p=2, dim=-1) \
                         + torch.norm(self.object_pos - self.right_hand_mf_pos, p=2, dim=-1) \
                         + torch.norm(self.object_pos - self.right_hand_rf_pos, p=2, dim=-1) \
-                        + torch.norm(self.object_pos - self.right_hand_th_pos, p=2, dim=-1)
+                        + torch.norm(self.object_pos - self.right_hand_th_pos, p=2, dim=-1) \
+                        + torch.norm(self.object_pos - self.right_hand_lf_pos, p=2, dim=-1)
         # self.obj_finger_dist = torch.sum(self.fingertip_to_object_vecs.norm(p=2, dim=-1), dim=1)
-        self.obj_finger_dist = torch.where(self.obj_finger_dist >= 3.0, 3.0 + 0 * self.obj_finger_dist, self.obj_finger_dist)
+        self.obj_finger_dist = torch.where(self.obj_finger_dist >= 3.75, 3.75 + 0 * self.obj_finger_dist, self.obj_finger_dist)
 
         delta_hand_pos_value = torch.norm(self.delta_target_hand_pos, p=1, dim=-1)
         delta_hand_rot_value = 2.0 * torch.asin(torch.clamp(torch.norm(self.delta_target_hand_rot[:, 0:3], p=2, dim=-1), max=1.0))
@@ -1416,11 +1418,11 @@ class XArm6LeapHandAP2AP(BaseTask):
         self.achieved_buf = torch.where(self.goal_obj_dist <= self.success_threshold, self.achieved_buf + 1, 0)
 
         if self.goal_cond:
-            flag = (self.obj_finger_dist <= 0.6).int() + (self.obj_hand_dist <= 0.12).int()  + target_flag
+            flag = (self.obj_finger_dist <= 0.75).int() + (self.obj_hand_dist <= 0.12).int()  + target_flag
             goal_hand_rew = torch.zeros_like(self.obj_finger_dist)
             goal_hand_rew = torch.where(flag == 5, 1 * (0.9 - 2 * self.goal_obj_dist), goal_hand_rew)
 
-            flag2 = (self.obj_finger_dist <= 0.6).int() + (self.obj_hand_dist <= 0.12).int()
+            flag2 = (self.obj_finger_dist <= 0.75).int() + (self.obj_hand_dist <= 0.12).int()
             hand_up = torch.zeros_like(self.obj_finger_dist)
             hand_up = torch.where(lowest >= lift_z, torch.where(flag2 == 2, 0.1 + 0.1 * self.actions[:, 2], hand_up), hand_up)
             hand_up = torch.where(lowest >= 0.80, torch.where(flag2 == 2, 0.2 - self.goal_hand_dist * 0, hand_up), hand_up)
@@ -1431,7 +1433,7 @@ class XArm6LeapHandAP2AP(BaseTask):
             reward = -0.5 * self.obj_finger_dist - 1.0 * self.obj_hand_dist + goal_hand_rew + hand_up + bonus  - 0.5*delta_value
 
         else:
-            self.flag = (self.obj_finger_dist <= 0.48).int() + (self.obj_hand_dist <= 0.12).int()
+            self.flag = (self.obj_finger_dist <= 0.6).int() + (self.obj_hand_dist <= 0.12).int()
             
             reward = 0.0
             for i in range(len(self.reward_functions)):
@@ -1605,7 +1607,7 @@ class XArm6LeapHandAP2AP(BaseTask):
 
     def update_curriculum(self):
         if self.curriculum:
-            if self.iteration >= 15000:
+            if self.iteration >= self.stage2_start_iteration:
                 self.too_far_reset_threshold = 1e6
                 self.goal_reset_stable_ratio = 0.2
                 # self.arm_action_clip = 0.3

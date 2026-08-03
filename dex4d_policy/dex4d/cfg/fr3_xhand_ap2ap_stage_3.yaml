@@ -1,6 +1,6 @@
 graphics_device_id: 0
 env:
-  env_name: "xarm6_leap_hand_ap2ap"
+  env_name: "fr3_xhand_ap2ap"
   numEnvs: 4096
   envSpacing: 1.5
   episodeLength: 400 # 250
@@ -28,9 +28,9 @@ env:
   kpDownsampleRatio: 2
 
   robot_default_dof_pos: [
-    # 0.0000,  0.3800, -1.3700,  0.0000,  0.9900,  0.0000,  # xArm6
-    0.0000,  -0.5200, -0.7000,  0.0000,  1.2200,  0.0000,  # xArm6, ALLCAT
-    0.0000,  0.0000, 0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000, 0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000 # LeapHand
+    # https://github.com/DAVIAN-Robotics/simtoolreal/blob/main/isaacsimenvs/tasks/simtoolreal/robots.py
+    0.0000,  0.2618,  0.0000, -2.0071,  0.0000,  2.3562, -0.7854,  # FR3
+    0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000 # XHand
   ]
 
   # object_code_dict: {
@@ -71,7 +71,7 @@ env:
 
   objectType: "pot" 
   observationType: "full_state"
-  handAgentIndex: "[[0, 1, 2, 3, 4, 5]]"
+  handAgentIndex: "[[0, 1, 2, 3, 4, 5, 6]]"
   asymmetric_observations: False # If False, both Actor and Critic get full state
   successTolerance: 0.1
   printNumSuccesses: False
@@ -79,7 +79,7 @@ env:
 
   asset:
     assetRoot: "../assets"
-    assetFileName: "urdf/xarm6_leap_description/xarm6_leap_right_2023.urdf"
+    assetFileName: "urdf/fr3_xhand_description/fr3_xhand/fr3_xhand.urdf"
     # assetFileNameBlock: "urdf/objects/cube_multicolor.urdf"
     # assetFileNameBall: "urdf/objects/ball.urdf"
     # assetFileNameEgg: "mjcf/open_ai_assets/hand/egg.xml"
