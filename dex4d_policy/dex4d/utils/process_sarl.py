@@ -1,3 +1,5 @@
+import os.path as osp
+
 from utils.util import copy_files
 
 def process_ppo(args, env, cfg_train, logdir):
@@ -15,8 +17,6 @@ def process_ppo(args, env, cfg_train, logdir):
     # logdir = logdir + "_seed{}".format(env.task.cfg["seed"])
     """Set up the PPO system for training or inferencing."""
     ppo = PPO(vec_env=env,
-              wandb_project=args.wandb_project,
-              wandb_entity=args.wandb_entity,
               actor_critic_class=eval(learn_cfg.get("actor_critic_class", "ActorCritic")),
               num_transitions_per_env=learn_cfg["nsteps"],
               num_learning_epochs=learn_cfg["noptepochs"],
@@ -41,9 +41,25 @@ def process_ppo(args, env, cfg_train, logdir):
               apply_reset=False,
               asymmetric=env.task.asymmetric_obs,
               is_vision=is_vision,
+              wandb_project=args.wandb_project,
+              wandb_entity=(args.wandb_entity or None),
+              wandb_name=(args.wandb_name or None),
               )
     if not is_testing:
         copy_files(args, logdir)
+
+    if (not is_testing) and args.capture_viewer:
+        from utils.pose_viewer import Dex4DPoseViewer
+        ppo.pose_viewer = Dex4DPoseViewer(
+            env.task,
+            output_dir=osp.join(logdir, "interactive_viewer"),
+            capture_len=args.capture_viewer_len,
+            capture_interval=args.capture_viewer_interval,
+            env_id=args.capture_viewer_env_id,
+            wandb_key=args.capture_viewer_wandb_key,
+            robot_raw_base=args.capture_viewer_raw_base,
+            url_check=args.capture_viewer_url_check,
+        )
 
     if is_testing and args.model_dir != "":
         print("Loading model from {}".format(chkpt_path))
@@ -98,6 +114,19 @@ def process_dagger(args, env, cfg_train, logdir):
               )
     if not is_testing:
         copy_files(args, logdir)
+
+    if (not is_testing) and args.capture_viewer:
+        from utils.pose_viewer import Dex4DPoseViewer
+        dagger.pose_viewer = Dex4DPoseViewer(
+            env.task,
+            output_dir=osp.join(logdir, "interactive_viewer"),
+            capture_len=args.capture_viewer_len,
+            capture_interval=args.capture_viewer_interval,
+            env_id=args.capture_viewer_env_id,
+            wandb_key=args.capture_viewer_wandb_key,
+            robot_raw_base=args.capture_viewer_raw_base,
+            url_check=args.capture_viewer_url_check,
+        )
 
     if is_testing and args.model_dir != "":
         print("Loading model from {}".format(chkpt_path))
