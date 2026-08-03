@@ -200,6 +200,7 @@ class FR3XHandAP2AP(BaseTask):
         self.y_unit_tensor = to_torch([0, 1, 0], dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
         self.z_unit_tensor = to_torch([0, 0, 1], dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
         self.reset_goal_buf = self.reset_buf.clone()
+        self._pending_root_state_indices = []
         self.achieved_buf = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
         self.successes = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
         self.current_successes = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
@@ -1154,9 +1155,22 @@ class FR3XHandAP2AP(BaseTask):
 
         self.root_state_tensor[self.goal_object_indices[env_ids], 7:13] = torch.zeros_like(self.root_state_tensor[self.goal_object_indices[env_ids], 7:13])
 
-        goal_object_indices = self.goal_object_indices[env_ids].to(torch.int32)
-        self.gym.set_actor_root_state_tensor_indexed(self.sim, gymtorch.unwrap_tensor(self.root_state_tensor), gymtorch.unwrap_tensor(goal_object_indices), len(env_ids))
-        
+        # Deferred, not pushed here. IsaacGym honours one
+        # `set_actor_root_state_tensor_indexed` per step and a later call
+        # replaces the pending set rather than merging into it, which the
+        # comment in `reset` already warns about. When any env resets in the
+        # same `pre_physics_step`, `reset`'s own call over `all_indices` used to
+        # discard this one, so the walked goal reached `root_state_tensor` and
+        # never reached the simulator, and the next
+        # `refresh_actor_root_state_tensor` reverted the ghost to the opening
+        # lift. Measured, the walked pose survived the write with |gs-B| = 0 and
+        # came back at z 0.9000 after the refresh on every sample.
+        # Reward, observation and termination were never affected, they read
+        # `goal_state`, which is a plain buffer nothing refreshes. This was the
+        # visualisation only, and it is upstream, the stock xArm6 task has it too.
+        self.deferred_set_actor_root_state_tensor_indexed(
+            [self.goal_object_indices[env_ids]])
+
         self.reset_goal_buf[env_ids] = 0
         
     def check_termination(self):
@@ -1218,9 +1232,8 @@ class FR3XHandAP2AP(BaseTask):
                                               self.goal_object_indices[env_ids],
                                               self.table_indices[env_ids], ]).to(torch.int32))
 
-        # NOTE: IMPORTANT! This must be the last `set_actor_root_state_tensor_indexed` call in the function
-        self.gym.set_actor_root_state_tensor_indexed(self.sim,gymtorch.unwrap_tensor(self.root_state_tensor),
-                                                     gymtorch.unwrap_tensor(all_indices), len(all_indices))
+        # Deferred as well, so ordering inside this function stops mattering.
+        self.deferred_set_actor_root_state_tensor_indexed([all_indices])
 
         ####### reset internal buffers ########
         if self.random_time:
@@ -1239,6 +1252,26 @@ class FR3XHandAP2AP(BaseTask):
         for env_id in env_ids:
             self.masked_keypoint_buf[env_id] = mask_keypoints_oneside(self.object_keypoint_buf[env_id], self.kp_downsample_ratio)
 
+    def deferred_set_actor_root_state_tensor_indexed(self, obj_indices):
+        """Accumulate actor indices for one flush per step.
+
+        Copied from SimToolReal's `isaacgymenvs/tasks/simtoolreal/env.py:3467`,
+        which exists for exactly this reason. IsaacGym supports one indexed root
+        state write per step, so every writer has to contribute to a single
+        unioned call instead of issuing its own.
+        """
+        self._pending_root_state_indices.extend(obj_indices)
+
+    def flush_set_actor_root_state_tensor_indexed(self):
+        pending = self._pending_root_state_indices
+        if not pending:
+            return
+        unique = torch.unique(torch.cat(pending).to(torch.int32))
+        self.gym.set_actor_root_state_tensor_indexed(
+            self.sim, gymtorch.unwrap_tensor(self.root_state_tensor),
+            gymtorch.unwrap_tensor(unique), len(unique))
+        self._pending_root_state_indices = []
+
     def pre_physics_step(self, actions):
         env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         goal_env_ids = self.reset_goal_buf.nonzero(as_tuple=False).squeeze(-1)
@@ -1248,6 +1281,9 @@ class FR3XHandAP2AP(BaseTask):
 
         if len(env_ids) > 0:
             self.reset(env_ids)
+
+        # One write per step, covering every writer above.
+        self.flush_set_actor_root_state_tensor_indexed()
 
         self.actions = actions.clone().to(self.device)
         

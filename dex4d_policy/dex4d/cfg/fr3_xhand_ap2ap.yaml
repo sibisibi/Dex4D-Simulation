@@ -1,7 +1,7 @@
 graphics_device_id: 0
 env:
   env_name: "fr3_xhand_ap2ap"
-  numEnvs: 4096
+  numEnvs: 3200
   envSpacing: 1.5
   episodeLength: 400 # 250
   enableDebugVis: False
@@ -13,10 +13,10 @@ env:
   repose_z: True
   goal_cond: False
 
-  too_far_reset_threshold: 0.3
+  too_far_reset_threshold: 1000000.0
 
   object_init_stable_ratio: 0.2
-  goal_reset_stable_ratio: 0.1
+  goal_reset_stable_ratio: 0.2
 
   # arm_action_clip: 1.0
   # hand_action_clip: 1.0
@@ -28,7 +28,8 @@ env:
   kpDownsampleRatio: 2
 
   robot_default_dof_pos: [
-    0.0000,  0.2000,  0.0000, -2.2000,  0.0000,  2.1000, -0.7850,  # FR3 (palm over table center, facing down)
+    # 0.0000,  0.2000,  0.0000, -2.2000,  0.0000,  2.1000, -0.7850,  # FR3 (palm over table center, facing down)
+    0.0000, -0.3740,  0.0000, -2.5060,  0.0000,  1.8480, -0.7850,  # FR3, ALLCAT (palm at stock ALLCAT point, facing down)
     0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000 # XHand (open)
   ]
 
@@ -36,8 +37,8 @@ env:
   #   'sem/Mug-10f6e09036350e92b3f21f1137c3c347':[0.06],
   # }
   object_code_dict_file: "cfg/train_set.yaml"
-  object_cls_list: ['bottle']
-  # object_cls_list: null # use all classes, ALLCAT
+  # object_cls_list: ['bottle']
+  object_cls_list: null # use all classes, ALLCAT
   object_cls_exclude_list: null
   object_num: null
 
@@ -45,10 +46,10 @@ env:
   forceLimitScale: 1.0
   useRelativeControl: False
   useOSCControl: False
-  dofSpeedScale: 10.0
+  dofSpeedScale: 1.5
   actionsMovingAverage: 1.0
-  controlFrequencyInv: 2 # 30 Hz
-  # controlFrequencyInv: 12 # 5 Hz, ALLCAT
+  # controlFrequencyInv: 2 # 30 Hz
+  controlFrequencyInv: 12 # 5 Hz, ALLCAT
 
   startPositionNoise: 0.0
   startRotationNoise: 0.0
@@ -71,7 +72,7 @@ env:
   objectType: "pot" 
   observationType: "full_state"
   handAgentIndex: "[[0, 1, 2, 3, 4, 5, 6]]"
-  asymmetric_observations: False # If False, both Actor and Critic get full state
+  asymmetric_observations: True # DAgger, student partial obs, expert full state
   successTolerance: 0.1
   printNumSuccesses: False
   maxConsecutiveSuccesses: 0
@@ -85,26 +86,26 @@ env:
     # assetFileNamePen: "mjcf/open_ai_assets/hand/pen.xml"
 
 reward_scales:
-  obj_finger: 1.0
-  obj_hand: 1.0
-  # obj_finger: 0 # ALLCAT
-  # obj_hand: 0 # ALLCAT
+  # obj_finger: 1.0
+  # obj_hand: 1.0
+  obj_finger: 0 # ALLCAT
+  obj_hand: 0 # ALLCAT
   goal_obj: 1.0
   success_bonus: 1.0
   terminal_bonus: 1.0
-  finger_curl_reg: 1.0
-  # finger_curl_reg: 10.0 # ALLCAT
+  # finger_curl_reg: 1.0
+  finger_curl_reg: 10.0 # ALLCAT
   table_collision_penalty: 1.0
   fall_penalty: 0
   hand_vel_penalty: 0
   dof_vel: 0
   dof_acc: 0
-  action_penalty: 1.0
-  # action_penalty: 5.0 # ALLCAT
+  # action_penalty: 1.0
+  action_penalty: 5.0 # ALLCAT
 
 task:
   randomize: True
-  curriculum: True
+  curriculum: False
   push_objects: True
   push_interval_s: 4.0
   max_push_linvel_xy: 0.2

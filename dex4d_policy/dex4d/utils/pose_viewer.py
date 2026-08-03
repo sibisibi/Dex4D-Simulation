@@ -106,10 +106,21 @@ def _embed_object_meshes(urdf_text, urdf_dir, strip_materials=False):
     """
     root = ET.fromstring(urdf_text)
     if strip_materials:
+        # Stripping alone is not enough. URDFLoader re-applies a material after
+        # loadMeshCb returns (URDFLoader.js:558), and with no <material> present
+        # it applies its own default, which overwrites color_override and is why
+        # the goal rendered grey. So write GOAL_COLOR in as a real material and
+        # let that re-application land on green.
+        r, g, b = GOAL_COLOR
         for parent in root.iter():
             for child in list(parent):
                 if child.tag == "material":
                     parent.remove(child)
+        for visual in root.findall(".//visual"):
+            mat = ET.SubElement(visual, "material")
+            mat.set("name", "goal_green")
+            col = ET.SubElement(mat, "color")
+            col.set("rgba", "{} {} {} 1".format(r, g, b))
     cache = {}
     for mesh_elem in root.findall(".//mesh"):
         filename = mesh_elem.get("filename")

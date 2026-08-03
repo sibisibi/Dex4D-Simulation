@@ -27,8 +27,8 @@ learn:
   noptepochs: 5
   nminibatches: 4 # this is per agent
   max_grad_norm: 1
-  # optim_stepsize: 3.e-4 # 3e-4 is default for single agent training with constant schedule
-  optim_stepsize: 3.e-5 # ALLCAT
+  optim_stepsize: 3.e-4 # 3e-4 is default for single agent training with constant schedule
+  # optim_stepsize: 3.e-5 # ALLCAT
   schedule: adaptive # could be adaptive or linear or fixed
   desired_kl: 0.016
   gamma: 0.96
