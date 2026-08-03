@@ -1,0 +1,235 @@
+env:
+  actionPenaltyScale: -0.0002
+  actionsMovingAverage: 1.0
+  aggregateMode: 1
+  asset:
+    assetFileName: urdf/xarm6_leap_description/xarm6_leap_right_2023.urdf
+    assetRoot: ../assets
+  asymmetric_observations: false
+  benchmark_alloc_pad: 2
+  benchmark_bank_json: /home/nas5/sibeenkim/work/_020-diverse-eval/goal_banks/core__remote-4df6e942001af26f16a077c4c0fc1181_s010.json
+  benchmark_keypoint_mesh: /home/nas5/sibeenkim/work/dex4d-020/dex4d_policy/assets/meshdatav3_scaled/core/remote-4df6e942001af26f16a077c4c0fc1181/coacd/decomposed_010.obj
+  benchmark_object_urdf: /home/nas5/sibeenkim/work/dex4d-020/balltest/object_pieces.urdf
+  benchmark_output_dir: /home/nas5/sibeenkim/work/dex4d-020/balltest
+  benchmark_scene_dice: 2
+  contextLength: 4
+  controlFrequencyInv: 12
+  delta_x_range:
+  - -0.1
+  - 0.1
+  delta_y_range:
+  - -0.1
+  - 0.1
+  distRewardScale: 20
+  dofSpeedScale: 10.0
+  enableDebugVis: false
+  envSpacing: 1.5
+  env_name: xarm6_leap_hand_ap2ap
+  episodeLength: 400
+  fallDistance: 0.4
+  fallPenalty: 0.0
+  forceLimitScale: 1.0
+  goal_cond: false
+  goal_reset_stable_ratio: 0.1
+  handAgentIndex: '[[0, 1, 2, 3, 4, 5]]'
+  kpDownsampleRatio: 2
+  maxConsecutiveSuccesses: 0
+  numEnvs: 4096
+  numKeypoints: 128
+  objectType: pot
+  object_cls_exclude_list: null
+  object_cls_list: null
+  object_code_dict:
+    core/remote-4df6e942001af26f16a077c4c0fc1181:
+    - 0.1
+  object_init_stable_ratio: 0.2
+  object_num: null
+  observationType: full_state
+  orientation_scale: 0.1
+  printNumSuccesses: false
+  random_prior: true
+  random_time: true
+  reachGoalBonus: 250
+  repose_z: true
+  resetDofPosRandomInterval: 0.0
+  resetDofVelRandomInterval: 0.0
+  resetPositionNoise: 0.0
+  resetRotationNoise: 0.0
+  robot_default_dof_pos:
+  - 0.0
+  - -0.52
+  - -0.7
+  - 0.0
+  - 1.22
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  rotEps: 0.1
+  rotRewardScale: 1.0
+  startPositionNoise: 0.0
+  startRotationNoise: 0.0
+  stiffnessScale: 1.0
+  successTolerance: 0.1
+  too_far_reset_threshold: 0.3
+  transition_scale: 0.1
+  useOSCControl: false
+  useRelativeControl: false
+graphics_device_id: 0
+reward_scales:
+  action_penalty: 5.0
+  dof_acc: 0
+  dof_vel: 0
+  fall_penalty: 0
+  finger_curl_reg: 10.0
+  goal_obj: 1.0
+  hand_vel_penalty: 0
+  obj_finger: 0
+  obj_hand: 0
+  success_bonus: 1.0
+  table_collision_penalty: 1.0
+  terminal_bonus: 1.0
+sim:
+  flex:
+    num_inner_iterations: 20
+    num_outer_iterations: 5
+    relaxation: 0.75
+    warm_start: 0.8
+  physx:
+    bounce_threshold_velocity: 0.2
+    contact_offset: 0.002
+    default_buffer_size_multiplier: 5.0
+    max_depenetration_velocity: 1000.0
+    num_position_iterations: 8
+    num_threads: 4
+    num_velocity_iterations: 0
+    rest_offset: 0.0
+    solver_type: 1
+  substeps: 2
+task:
+  curriculum: true
+  max_push_angvel: 0.2
+  max_push_linvel_xy: 0.2
+  push_interval_s: 4.0
+  push_objects: true
+  randomization_params:
+    actions:
+      distribution: gaussian
+      operation: additive
+      range:
+      - 0.0
+      - 0.05
+      range_correlated:
+      - 0
+      - 0.015
+      schedule: linear
+      schedule_steps: 40000
+    actor_params:
+      object:
+        rigid_body_properties:
+          mass:
+            distribution: uniform
+            operation: scaling
+            range:
+            - 0.5
+            - 1.5
+            schedule: linear
+            schedule_steps: 30000
+        rigid_shape_properties:
+          friction:
+            distribution: uniform
+            num_buckets: 250
+            operation: scaling
+            range:
+            - 0.7
+            - 1.3
+            schedule: linear
+            schedule_steps: 30000
+      robot:
+        dof_properties:
+          damping:
+            distribution: uniform
+            operation: scaling
+            range:
+            - 0.9
+            - 1.1
+            schedule: linear
+            schedule_steps: 30000
+          lower:
+            distribution: gaussian
+            operation: additive
+            range:
+            - 0
+            - 0.01
+            schedule: linear
+            schedule_steps: 30000
+          stiffness:
+            distribution: uniform
+            operation: scaling
+            range:
+            - 0.9
+            - 1.1
+            schedule: linear
+            schedule_steps: 30000
+          upper:
+            distribution: gaussian
+            operation: additive
+            range:
+            - 0
+            - 0.01
+            schedule: linear
+            schedule_steps: 30000
+        rigid_body_properties:
+          mass:
+            distribution: uniform
+            operation: scaling
+            range:
+            - 0.5
+            - 1.5
+            schedule: linear
+            schedule_steps: 30000
+        rigid_shape_properties:
+          friction:
+            distribution: uniform
+            num_buckets: 250
+            operation: scaling
+            range:
+            - 0.7
+            - 1.3
+            schedule: linear
+            schedule_steps: 30000
+    frequency: 720
+    observations:
+      distribution: gaussian
+      operation: additive
+      range:
+      - 0
+      - 0.002
+      range_correlated:
+      - 0
+      - 0.001
+      schedule: linear
+      schedule_steps: 40000
+    sim_params:
+      gravity:
+        distribution: gaussian
+        operation: additive
+        range:
+        - 0
+        - 0.4
+        schedule: linear
+        schedule_steps: 40000
+  randomize: true
