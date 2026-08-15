@@ -20,6 +20,8 @@ parser.add_argument("--wandb_name", default="")
 parser.add_argument("--corpus_root", default="")
 parser.add_argument("--visual_feat_root", required=True)
 parser.add_argument("--seed", type=int, default=0)
+parser.add_argument("--stage3", action="store_true")
+parser.add_argument("--model_dir", default="")
 parser.add_argument("--capture_viewer", action="store_true")
 parser.add_argument("--capture_viewer_len", type=int, default=600)
 parser.add_argument("--capture_viewer_interval", type=int, default=1000)
@@ -95,6 +97,8 @@ def main():
     d4.corpus_root = args.corpus_root
     d4.visual_feat_root = args.visual_feat_root
     d4.robot_urdf_src = args.robot_urdf
+    if args.stage3:
+        d4 = d4.stage3()
     px = d4.physx
 
     @configclass
@@ -135,8 +139,9 @@ def main():
     print(f"  obs {vec.observation_space.shape}  state {vec.state_space.shape}  "
           f"act {vec.action_space.shape}  kp_start {vec.task.kp_start}", flush=True)
 
+    ppo_yaml = "config_stage_3.yaml" if args.stage3 else "config_stage_1_2.yaml"
     cfg_train = yaml.safe_load(
-        (Path(args.repo) / "dex4d_policy/dex4d/cfg/ppo/config_stage_1_2.yaml").read_text())
+        (Path(args.repo) / "dex4d_policy/dex4d/cfg/ppo" / ppo_yaml).read_text())
     learn = cfg_train["learn"]
     Path(args.logdir).mkdir(parents=True, exist_ok=True)
 
@@ -169,6 +174,9 @@ def main():
         wandb_entity=args.wandb_entity,
         wandb_name=args.wandb_name or None,
     )
+    if args.model_dir:
+        runner.load(args.model_dir)
+        print(f"  resumed at {runner.current_learning_iteration}", flush=True)
     print(f"\n=== PPO built, running to {args.max_iterations}", flush=True)
     runner.run(num_learning_iterations=args.max_iterations,
                log_interval=learn.get("save_interval", 100))
